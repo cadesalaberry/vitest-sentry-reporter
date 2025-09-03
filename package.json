@@ -1,0 +1,17 @@
+{
+  "name": "vitest-sentry-reporter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.15.1",
+  "devDependencies": {
+    "@sentry/node": "^10.8.0",
+    "vitest": "^3.2.4"
+  }
+}
