@@ -27,3 +27,4 @@ Adopt MADR (Markdown Architectural Decision Records) as our ADR format and proce
 
 - MADR documentation: https://adr.github.io/madr/
 - MADR repository: https://github.com/adr/madr
+

@@ -1,15 +1,50 @@
 {
   "name": "vitest-sentry-reporter",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Vitest reporter that sends failures and context to Sentry.",
+  "main": "dist/index.js",
+  "types": "types/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "bun build src/index.ts --outdir=dist --target=node --format=esm",
+    "prepublishOnly": "bun run build",
+    "test": "echo \"No tests yet\"",
+    "prepare": "echo \"Using Bun as the package manager\""
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.15.1",
+  "keywords": [
+    "vitest",
+    "reporter",
+    "sentry",
+    "testing",
+    "ci"
+  ],
+  "author": "C-A de Salaberry",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chanto/vitest-sentry-reporter.git"
+  },
+  "homepage": "https://github.com/chanto/vitest-sentry-reporter#readme",
+  "bugs": {
+    "url": "https://github.com/chanto/vitest-sentry-reporter/issues"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "docs/decisions"
+  ],
+  "engines": {
+    "node": ">=18",
+    "bun": ">=1.1.0"
+  },
+  "packageManager": "bun@1.2.21",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@sentry/node": ">=10.0.0",
+    "vitest": ">=1.0.0"
+  },
   "devDependencies": {
     "@sentry/node": "^10.8.0",
     "vitest": "^3.2.4"

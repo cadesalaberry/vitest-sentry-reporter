@@ -30,3 +30,4 @@ cp adr-template.md 0001-short-title.md
 - `rejected`: Considered but not adopted
 - `deprecated`: No longer recommended for new work
 - `superseded`: Replaced by another ADR (link the successor)
+

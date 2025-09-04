@@ -18,3 +18,4 @@ What becomes easier or harder because of this decision?
 ## References
 
 - Links to related ADRs, issues, docs, and external resources
+
