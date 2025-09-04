@@ -1,4 +1,4 @@
-import type { CIProvider } from './types';
+import type { CIProvider } from './types.js';
 
 export const GitLabCIProvider: CIProvider = {
   name: 'gitlab',

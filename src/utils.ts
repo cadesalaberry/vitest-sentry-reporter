@@ -1,7 +1,7 @@
 import * as os from 'os';
 import { createRequire } from 'module';
-import type { Primitive, VitestTaskLike, VitestTaskResult, FailureContext, VitestErrorLike, VitestSuiteNode } from './index.';
-import { detectProvider } from './ci-providers';
+import type { Primitive, VitestTaskLike, VitestTaskResult, FailureContext, VitestErrorLike, VitestSuiteNode } from './types.js';
+import { detectProvider } from './ci-providers/index.js';
 
 export function toErrorMessage(err: unknown): string | undefined {
   if (!err) return undefined;

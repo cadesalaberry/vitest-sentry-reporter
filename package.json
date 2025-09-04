@@ -2,12 +2,15 @@
   "name": "vitest-sentry-reporter",
   "version": "1.0.0",
   "description": "Vitest reporter that sends failures and context to Sentry.",
+  "type": "module",
   "main": "dist/index.js",
   "types": "types/index.d.ts",
   "scripts": {
-    "build": "bun build src/index.ts --outdir=dist --target=node --format=esm",
+    "build": "bun build --target=node --format=esm --outdir=dist src/index.ts && bun run build:types",
+    "build:types": "tsc --emitDeclarationOnly",
     "prepublishOnly": "bun run build",
-    "test": "echo \"No tests yet\"",
+    "test": "vitest",
+    "test:dogfood": "vitest --reporter=./dist/index.js",
     "prepare": "echo \"Using Bun as the package manager\""
   },
   "keywords": [
@@ -47,6 +50,8 @@
   },
   "devDependencies": {
     "@sentry/node": "^10.8.0",
+    "@types/node": "^18",
+    "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }
 }

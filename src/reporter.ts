@@ -1,6 +1,7 @@
-import { init, flush, withScope, captureException, User } from '@sentry/node';
-import type { FailureContext, VitestSentryReporterOptions, TaskUpdatePack, VitestTaskLike, VitestTaskResult, Primitive } from './index.d';
-import { toFailureContext, baseTags, cleanRecord, extras, inferEnvironment, commitSha } from './utils';
+import { init, flush, withScope, captureException } from '@sentry/node';
+import type { User } from '@sentry/node';
+import type { FailureContext, VitestSentryReporterOptions, TaskUpdatePack, VitestTaskLike, VitestTaskResult, Primitive } from './types.js';
+import { toFailureContext, baseTags, cleanRecord, extras, inferEnvironment, commitSha } from './utils.js';
 
 export class VitestSentryReporter {
   public name: string;
