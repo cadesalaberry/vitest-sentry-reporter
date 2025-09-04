@@ -1,5 +1,5 @@
 import { init, flush, withScope, captureException, User } from '@sentry/node';
-import type { FailureContext, VitestSentryReporterOptions, TaskUpdatePack, VitestTaskLike, VitestTaskResult, Primitive } from './index';
+import type { FailureContext, VitestSentryReporterOptions, TaskUpdatePack, VitestTaskLike, VitestTaskResult, Primitive } from './index.d';
 import { toFailureContext, baseTags, cleanRecord, extras, inferEnvironment, commitSha } from './utils';
 
 export class VitestSentryReporter {
