@@ -5,7 +5,7 @@
 
 ## Context
 
-This repository is an npm package intended for publication. The project previously specified `pnpm` in `package.json` but does not rely on workspace features and has a small dependency surface. We want a fast developer experience (installs, scripts) and a single lockfile. Bun provides an all-in-one toolchain (runtime, test runner, bundler, package manager) with strong Node compatibility, which fits this project well.
+This repository is an npm package intended for publication. We want a fast developer experience (installs, scripts) and a single lockfile. Bun provides an all-in-one toolchain (runtime, test runner, bundler, package manager) with strong Node compatibility, which fits this project well.
 
 ## Decision
 
