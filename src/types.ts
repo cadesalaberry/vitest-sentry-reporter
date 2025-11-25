@@ -73,6 +73,7 @@ export type VitestSentryReporterOptions = {
   maxEventsPerRun?: number;
   /**
    * When true, prints what would be sent to Sentry without actually sending events.
+   * It has no effect if `enabled` is false.
    */
   dryRun?: boolean;
 };
