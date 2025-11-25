@@ -19,7 +19,7 @@
     "outDir": "dist"
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"],
-  "exclude": ["dist", "node_modules"]
+  "exclude": ["dist", "node_modules", "**/*.test.ts", "**/*.spec.ts"]
 }
 
 

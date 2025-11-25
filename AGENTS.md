@@ -13,7 +13,7 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 
 - Install deps: `bun install`
 - Build library: `bun run build`
-- Run tests (placeholder until tests are added): `bun run test`
+- Run tests (placeholder until tests are added): `bun run test run`
 - Prepare step (informational): `bun run prepare`
 
 ## Dev workflow tips
@@ -51,7 +51,7 @@ chore(release): 🔖 1.0.1
 - When adding tests:
   - Prefer lace unit tests alongside source.
   - Prefer fast, deterministic tests with clear assertions.
-  - You can invoke Vitest directly if needed: `bunx vitest run --reporter=dot`
+  - You can invoke Vitest directly if needed: `bun run test run --reporter=dot`
 
 ## Security considerations
 
@@ -61,7 +61,7 @@ chore(release): 🔖 1.0.1
 ## PR checklist (for agents)
 
 - Build succeeds: `bun run build`.
-- Tests pass (once present): `bun run test`.
+- Tests pass (once present): `bun run test run`.
 - Types are accurate and exported via `types/index.d.ts`.
 - Keep changes minimal; update docs if behavior changes.
 

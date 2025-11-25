@@ -10,7 +10,7 @@
     "build:types": "tsc --emitDeclarationOnly",
     "prepublishOnly": "bun run build",
     "test": "vitest",
-    "test:dogfood": "vitest --reporter=./dist/index.js",
+    "test:dogfood": "DOGFOOD=true bun run test",
     "prepare": "echo \"Using Bun as the package manager\""
   },
   "keywords": [
@@ -52,6 +52,6 @@
     "@sentry/node": "^10.8.0",
     "@types/node": "^18",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.13"
   }
 }
