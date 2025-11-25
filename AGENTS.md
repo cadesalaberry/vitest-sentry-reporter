@@ -32,18 +32,8 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 
 ## Commit message conventions
 
+- Strictly follow the conventions defined in [docs/COMMIT_CONVENTION.md](docs/COMMIT_CONVENTION.md).
 - Use [Conventional Commits](https://www.conventionalcommits.org/) with a Gitmoji placed immediately before the description.
-- Subject format: `type(scope): <gitmoji> description`
-- Choose the emoji from [Gitmoji](https://gitmoji.dev/).
-
-Examples:
-
-```text
-feat(reporter): ✨ add initial Sentry reporter skeleton
-fix(config): 🐛 handle missing DSN without throwing
-docs: 📝 add ADR for Bun adoption
-chore(release): 🔖 1.0.1
-```
 
 ## Testing instructions
 
