@@ -49,9 +49,9 @@
     "vitest": ">=1.0.0"
   },
   "devDependencies": {
-    "@sentry/node": "^10.8.0",
+    "@sentry/node": "^10.27.0",
     "@types/node": "^18",
-    "typescript": "^5.9.2",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.13"
   }
 }
