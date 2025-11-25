@@ -10,7 +10,7 @@
     "build:types": "tsc --emitDeclarationOnly",
     "prepublishOnly": "bun run build",
     "test": "vitest",
-    "test:dogfood": "DOGFOOD=true bun run test",
+    "test:dogfood": "DOGFOOD=true bun run test run",
     "prepare": "echo \"Using Bun as the package manager\""
   },
   "keywords": [
