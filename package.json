@@ -10,6 +10,7 @@
     "build:types": "tsc --emitDeclarationOnly",
     "prepublishOnly": "bun run build",
     "test": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:dogfood": "DOGFOOD=true bun run test run",
     "prepare": "echo \"Using Bun as the package manager\""
   },
@@ -51,6 +52,7 @@
   "devDependencies": {
     "@sentry/node": "^10.27.0",
     "@types/node": "^18",
+    "@vitest/coverage-v8": "^4.0.13",
     "typescript": "^5.9.3",
     "vitest": "^4.0.13"
   }

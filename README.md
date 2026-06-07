@@ -1,5 +1,7 @@
 # vitest-sentry-reporter
 
+[![codecov](https://codecov.io/gh/cadesalaberry/vitest-sentry-reporter/graph/badge.svg)](https://codecov.io/gh/cadesalaberry/vitest-sentry-reporter)
+
 Uses Sentry to collect software defects and orchestrate its correction.
 
 ## Why report failing Vitest tests to Sentry
