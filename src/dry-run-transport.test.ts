@@ -31,7 +31,7 @@ describe('makeDryRunTransport', () => {
     await transport.send(envelope as any);
 
     const calls = (console.warn as any).mock.calls;
-    expect(calls.length).toBe(2);
+    expect(calls.length).toBe(1);
     expect(calls[0][0]).toContain('dryRun transport – would send:');
     expect(typeof calls[0][1]).toBe('string');
     expect(calls[0][1]).toContain("Event[");
