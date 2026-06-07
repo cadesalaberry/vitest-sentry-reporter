@@ -8,6 +8,11 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        vitest: ['3', '4']
+    name: build-and-test (vitest ${{ matrix.vitest }})
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,13 +25,22 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Pin Vitest ${{ matrix.vitest }}
+        run: bun add -d vitest@${{ matrix.vitest }}
+
       - name: Build
         run: bun run build
 
       - name: Test
+        if: matrix.vitest != '4'
+        run: bun run test run
+
+      - name: Test with coverage
+        if: matrix.vitest == '4'
         run: bun run test:coverage
 
       - name: Upload coverage to Codecov
+        if: matrix.vitest == '4'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

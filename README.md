@@ -96,7 +96,7 @@ export default defineConfig({
 });
 ```
 
-Compatible with Vitest 4+.
+Compatible with Vitest 3 and 4.
 
 ### What gets reported
 
