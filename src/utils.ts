@@ -1,14 +1,13 @@
 import * as os from 'os';
 import { createRequire } from 'module';
-import type { TestCase, TestModule, TestSuite } from 'vitest/node';
-import type { Primitive, FailureContext } from './types.js';
+import type { Primitive, VitestTaskLike, VitestTaskResult, FailureContext, VitestErrorLike, VitestSuiteNode } from './types.js';
 import { detectProvider } from './ci-providers/index.js';
 
 export function toErrorMessage(err: unknown): string | undefined {
   if (!err) return undefined;
   if (typeof err === 'string') return err;
-  const e = err as { message?: unknown; name?: unknown };
-  return String(e.message ?? e.name ?? 'Error');
+  const e = err as Partial<VitestErrorLike> | Error;
+  return String((e as Error).message ?? (e as VitestErrorLike).name ?? 'Error');
 }
 
 export function toStack(err: unknown): string | undefined {
@@ -17,45 +16,55 @@ export function toStack(err: unknown): string | undefined {
   return typeof maybe.stack === 'string' ? maybe.stack : undefined;
 }
 
-/**
- * Walk a test case's parent chain, collecting the enclosing suite names
- * (outermost first). The chain ends at the test module, which is not a suite.
- */
-export function collectSuitePath(testCase: TestCase): string[] {
+export function collectSuitePath(task: VitestTaskLike): string[] {
   const names: string[] = [];
-  let cur: TestSuite | TestModule = testCase.parent;
-  while (cur.type === 'suite') {
-    names.unshift(cur.name);
-    cur = cur.parent;
+  let cur: VitestSuiteNode | undefined = task.suite ?? task.parent;
+  while (cur) {
+    if (cur.name) names.unshift(String(cur.name));
+    cur = cur.suite ?? cur.parent;
   }
   return names;
 }
 
-/**
- * Convert a finished Vitest {@link TestCase} into the reporter's
- * {@link FailureContext}. `logs` are collected separately via the
- * `onUserConsoleLog` reporter hook and threaded in by the caller.
- */
-export function toFailureContext(testCase: TestCase, logs?: string[]): FailureContext {
-  const result = testCase.result();
-  const diagnostic = testCase.diagnostic();
-  const firstErr = result.errors?.[0];
-  const suitePath = collectSuitePath(testCase);
+export function buildFullTitle(suitePath: string[] | undefined, testName: string): string | undefined {
+  if (!suitePath?.length) return testName;
+  return `${suitePath.join(' > ')} > ${testName}`;
+}
+
+export function extractLogs(task: VitestTaskLike): string[] | undefined {
+  const logs = task.result?.logs ?? task.logs;
+  if (!Array.isArray(logs)) return undefined;
+  return logs.map((l) => (typeof l === 'string' ? l : String((l as unknown as { message?: string; text?: string }).message ?? (l as unknown as { message?: string; text?: string }).text ?? l)));
+}
+
+export function toFailureContext(task: VitestTaskLike, result?: VitestTaskResult): FailureContext {
+  const failures = result?.errors ?? task.errors ?? [];
+  const firstErr = failures[0];
+  const testName = String(task.name ?? task.fullName ?? 'unknown');
+  const filePath = task.file?.filepath ?? task.file?.name ?? task.location?.file;
+  const suitePath = Array.isArray(task.suitePath) ? task.suitePath : (task.suite ? collectSuitePath(task) : undefined);
+
+  const message = toErrorMessage(firstErr);
+  const stack = toStack(firstErr);
+  const durationMs = result?.duration ?? task.duration;
+  const retry = result?.retry ?? task.retry;
+  const flaky = Boolean(result?.flaky ?? task.meta?.flaky);
+  const logs = extractLogs(task);
 
   return {
-    id: testCase.id,
-    filePath: testCase.module.moduleId,
-    testName: testCase.name,
-    fullTitle: testCase.fullName,
+    id: String(task.id ?? task.name ?? filePath ?? Math.random()),
+    filePath,
+    testName,
+    fullTitle: buildFullTitle(suitePath, testName),
     suitePath,
-    message: toErrorMessage(firstErr),
-    stack: toStack(firstErr),
+    message,
+    stack,
     error: firstErr,
-    durationMs: diagnostic?.duration,
-    retry: diagnostic?.retryCount,
-    flaky: Boolean(diagnostic?.flaky),
+    durationMs,
+    retry,
+    flaky,
     logs,
-    meta: { testId: testCase.id, projectName: testCase.project.name },
+    meta: { rawTask: task, rawResult: result },
   };
 }
 

@@ -16,6 +16,8 @@ import {
   toErrorMessage,
   toStack,
   collectSuitePath,
+  buildFullTitle,
+  extractLogs,
   toFailureContext,
   ciProvider,
   repository,
@@ -27,48 +29,8 @@ import {
   baseTags,
   extras,
 } from './utils';
-import type { TestCase } from 'vitest/node';
 
 type AnyFn = (...args: unknown[]) => unknown;
-
-/**
- * Build a minimal object that quacks like a finished Vitest {@link TestCase},
- * exposing only the surface the reporter reads.
- */
-function makeTestCase(overrides: {
-  id?: string;
-  name?: string;
-  fullName?: string;
-  moduleId?: string;
-  suiteNames?: string[];
-  state?: 'failed' | 'passed';
-  errors?: Array<{ message?: string; stack?: string; name?: string }>;
-  duration?: number;
-  retryCount?: number;
-  flaky?: boolean;
-  projectName?: string;
-} = {}): TestCase {
-  const moduleNode = { type: 'module' as const };
-  // Build the suite chain innermost-last so the parent walk yields outermost-first.
-  let parent: unknown = moduleNode;
-  for (const name of overrides.suiteNames ?? []) {
-    parent = { type: 'suite' as const, name, parent };
-  }
-  return {
-    id: overrides.id ?? 'test-id',
-    name: overrides.name ?? 'a test',
-    fullName: overrides.fullName ?? overrides.name ?? 'a test',
-    module: { moduleId: overrides.moduleId ?? '/tests/x.test.ts' },
-    project: { name: overrides.projectName ?? 'unit' },
-    parent,
-    result: () => ({ state: overrides.state ?? 'failed', errors: overrides.errors ?? [] }),
-    diagnostic: () => ({
-      duration: overrides.duration ?? 0,
-      retryCount: overrides.retryCount ?? 0,
-      flaky: overrides.flaky ?? false,
-    }),
-  } as unknown as TestCase;
-}
 
 async function getDetectProviderMock(): Promise<AnyFn> {
   const mod = await import('./ci-providers/index.js');
@@ -101,31 +63,42 @@ describe('utils', () => {
     expect(toStack(undefined)).toBeUndefined();
   });
 
-  it('collectSuitePath walks up the parent chain, outermost first', () => {
-    const testCase = makeTestCase({ suiteNames: ['root', 'outer'] });
-    expect(collectSuitePath(testCase)).toEqual(['root', 'outer']);
+  it('collectSuitePath walks up suite/parent chain', () => {
+    const task = {
+      suite: { name: 'outer', parent: { name: 'root' } },
+      parent: undefined,
+    } as unknown as import('./types').VitestTaskLike;
+    expect(collectSuitePath(task)).toEqual(['root', 'outer']);
   });
 
-  it('collectSuitePath returns [] for a top-level test', () => {
-    const testCase = makeTestCase({ suiteNames: [] });
-    expect(collectSuitePath(testCase)).toEqual([]);
+  it('buildFullTitle joins suite path and test name', () => {
+    expect(buildFullTitle(['a', 'b'], 'c')).toBe('a > b > c');
+    expect(buildFullTitle(undefined, 'x')).toBe('x');
   });
 
-  it('toFailureContext builds a rich context object from a TestCase', () => {
-    const testCase = makeTestCase({
+  it('extractLogs normalizes different log shapes', () => {
+    const task = {
+      result: {
+        logs: ['a', { message: 'b' } as unknown as string, { text: 'c' } as unknown as string, 42 as unknown as string],
+      },
+    } as unknown as import('./types').VitestTaskLike;
+    expect(extractLogs(task)).toEqual(['a', 'b', 'c', '42']);
+  });
+
+  it('toFailureContext builds a rich context object', () => {
+    const task = {
       id: 'id-1',
       name: 'does things',
-      fullName: 'suite1 > suite2 > does things',
-      moduleId: '/tests/example.test.ts',
-      suiteNames: ['suite1', 'suite2'],
-      state: 'failed',
+      file: { filepath: '/tests/example.test.ts' },
+      suitePath: ['suite1', 'suite2'],
       errors: [{ message: 'bad', stack: 'STACK' }],
-      duration: 123,
-      retryCount: 1,
-      flaky: true,
-    });
+      logs: ['l1'],
+      meta: { flaky: true },
+    } as unknown as import('./types').VitestTaskLike;
 
-    const ctx = toFailureContext(testCase, ['l1']);
+    const result = { duration: 123, retry: 1, flaky: true, errors: [{ message: 'bad', stack: 'STACK' }] } as import('./types').VitestTaskResult;
+
+    const ctx = toFailureContext(task, result);
     expect(ctx).toEqual(
       expect.objectContaining({
         id: 'id-1',

@@ -94,13 +94,55 @@ export type FailureContext = {
   meta?: Record<string, unknown>;
 };
 
-/**
- * Minimal shape of Vitest's `UserConsoleLog`, delivered to the reporter's
- * `onUserConsoleLog` hook. We only depend on the fields we actually use so the
- * reporter does not couple to Vitest internals beyond the public reporter API.
- */
-export interface VitestUserConsoleLog {
-  content: string;
-  type: 'stdout' | 'stderr';
-  taskId?: string;
+export type VitestTaskState = 'fail' | 'pass' | 'skip' | 'todo' | 'only' | 'run' | 'only-fail';
+
+export interface VitestErrorLike {
+  name?: string;
+  message?: string;
+  stack?: string;
+  cause?: unknown;
 }
+
+export interface VitestTaskResult {
+  state?: VitestTaskState;
+  duration?: number;
+  retry?: number;
+  flaky?: boolean;
+  errors?: VitestErrorLike[];
+  logs?: string[];
+}
+
+export interface VitestFileRef { filepath?: string; name?: string }
+export interface VitestLocation { file?: string }
+export interface VitestSuiteNode { name?: string; suite?: VitestSuiteNode; parent?: VitestSuiteNode }
+
+export interface VitestTaskLike {
+  id?: string | number;
+  name?: string;
+  fullName?: string;
+  suitePath?: string[];
+  suite?: VitestSuiteNode;
+  parent?: VitestSuiteNode;
+  file?: VitestFileRef;
+  location?: VitestLocation;
+  result?: VitestTaskResult;
+  errors?: VitestErrorLike[];
+  duration?: number;
+  retry?: number;
+  meta?: { flaky?: boolean };
+  logs?: string[];
+  state?: VitestTaskState;
+}
+
+export type TaskUpdatePack =
+  | [task: VitestTaskLike, result?: VitestTaskResult]
+  | { task: VitestTaskLike; result?: VitestTaskResult };
+
+export declare class VitestSentryReporter {
+  name: string;
+  constructor(options?: VitestSentryReporterOptions);
+  onInit(): void;
+  onTaskUpdate(packs: TaskUpdatePack[]): void;
+  onFinished(files?: { tasks?: VitestTaskLike[] }[]): void;
+}
+export default VitestSentryReporter;

@@ -1,18 +1,17 @@
 import { init, flush, withScope, captureException } from '@sentry/node';
-import type { NodeOptions } from '@sentry/node';
-import type { Reporter, TestCase, TestModule, TestRunEndReason, SerializedError } from 'vitest/node';
+import type { RunnerTestFile as File } from 'vitest';
+import type { NodeOptions, User } from '@sentry/node';
 import { makeDryRunTransport } from './dry-run-transport.js';
-import type { FailureContext, VitestSentryReporterOptions, VitestUserConsoleLog, Primitive } from './types.js';
+import type { FailureContext, VitestSentryReporterOptions, TaskUpdatePack, VitestTaskLike, VitestTaskResult, Primitive } from './types.js';
 import { toFailureContext, baseTags, cleanRecord, extras, inferEnvironment, commitSha } from './utils.js';
 
-export class VitestSentryReporter implements Reporter {
+export class VitestSentryReporter {
   public name: string;
   private options: VitestSentryReporterOptions;
   private enabled: boolean;
   private initialized: boolean;
   private reportedIds: Set<string>;
   private queued: FailureContext[];
-  private logsByTask: Map<string, string[]>;
   private maxEventsPerRun?: number;
 
   constructor(options: VitestSentryReporterOptions = {}) {
@@ -22,7 +21,6 @@ export class VitestSentryReporter implements Reporter {
     this.initialized = false;
     this.reportedIds = new Set<string>();
     this.queued = [];
-    this.logsByTask = new Map<string, string[]>();
     this.maxEventsPerRun = options.maxEventsPerRun;
   }
 
@@ -32,51 +30,51 @@ export class VitestSentryReporter implements Reporter {
     return;
   }
 
-  onUserConsoleLog(log: VitestUserConsoleLog): void {
-    // Buffer console output per test so it can be attached to the failure event.
-    if (!log.taskId) return;
-    const existing = this.logsByTask.get(log.taskId);
-    if (existing) existing.push(log.content);
-    else this.logsByTask.set(log.taskId, [log.content]);
+  onTaskUpdate(packs: TaskUpdatePack[]): void {
+    if (!Array.isArray(packs)) return;
+    for (const pack of packs) {
+      const task: VitestTaskLike = Array.isArray(pack) ? pack[0] : pack.task;
+      const result: VitestTaskResult | undefined = Array.isArray(pack) ? pack[1] : pack.result;
+      const state = result?.state ?? task.state;
+      if (state !== 'fail') continue;
+
+      const id = String(task?.id ?? task?.name ?? Math.random());
+      if (this.reportedIds.has(id)) continue;
+      const ctx = toFailureContext(task, result);
+      this.enqueueFailure(ctx);
+      this.reportedIds.add(id);
+    }
   }
 
-  onTestCaseResult(testCase: TestCase): void {
-    // Collect failures as they happen so reporting stays incremental.
-    if (testCase.result().state !== 'failed') return;
-    this.collectFailure(testCase);
-  }
 
-  async onTestRunEnd(
-    testModules: ReadonlyArray<TestModule>,
-    _unhandledErrors: ReadonlyArray<SerializedError>,
-    _reason: TestRunEndReason,
-  ): Promise<void> {
+  async onTestRunEnd(testModules: File[], unhandledErrors: unknown[]): Promise<void> {
     try {
-      // Defensive sweep: catch any failed test not seen via onTestCaseResult.
-      for (const testModule of testModules) {
-        for (const testCase of testModule.children.allTests('failed')) {
-          this.collectFailure(testCase);
+      if (Array.isArray(testModules)) {
+        for (const file of testModules) {
+          const tasks = Array.isArray(file?.tasks) ? file.tasks : [];
+          for (const t of tasks) {
+            const task = t as unknown as VitestTaskLike;
+            const result = task.result;
+            const state = result?.state ?? task.state;
+            if (state !== 'fail') continue;
+            const id = String(task.id ?? task.name ?? Math.random());
+            if (this.reportedIds.has(id)) continue;
+            const ctx = toFailureContext(task, result);
+            this.enqueueFailure(ctx);
+            this.reportedIds.add(id);
+          }
         }
       }
 
-      let sent = 0;
       for (const ctx of this.queued) {
-        if (this.maxEventsPerRun && sent >= this.maxEventsPerRun) break;
         this.reportFailure(ctx);
-        sent++;
+        if (this.maxEventsPerRun && this.reportedIds.size >= this.maxEventsPerRun) break;
       }
     } finally {
       if (this.enabled && this.initialized) {
         await flush(3000).catch(() => void 0);
       }
     }
-  }
-
-  private collectFailure(testCase: TestCase): void {
-    if (this.reportedIds.has(testCase.id)) return;
-    this.reportedIds.add(testCase.id);
-    const ctx = toFailureContext(testCase, this.logsByTask.get(testCase.id));
-    this.enqueueFailure(ctx);
   }
 
   private enqueueFailure(ctx: FailureContext): void {
@@ -159,7 +157,7 @@ export class VitestSentryReporter implements Reporter {
       return;
     }
 
-    if (isDryRun) console.log('[vitest-sentry-reporter] initializing Sentry with DSN:', dsn);
+    console.log('[vitest-sentry-reporter] initializing Sentry with DSN:', dsn);
     const environment = this.options.environment ?? process.env.SENTRY_ENVIRONMENT ?? inferEnvironment();
     const release = this.options.release ?? process.env.SENTRY_RELEASE ?? commitSha() ?? undefined;
 
@@ -176,7 +174,7 @@ export class VitestSentryReporter implements Reporter {
       environment,
       release,
       dist: release,
-      debug: isDryRun,
+      debug: true || isDryRun,
       integrations: (defaults) => defaults.filter((integration) => minimalIntegrationNames.has(integration.name)),
       tracesSampleRate: 0,
       ...(this.options.sentryOptions ?? {}),
