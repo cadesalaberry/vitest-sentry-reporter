@@ -24,7 +24,18 @@ jobs:
         run: bun run build
 
       - name: Test
-        run: bun run test
+        run: bun run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: cadesalaberry/vitest-sentry-reporter
+          files: ./coverage/lcov.info
+          # Install the uploader from PyPI to avoid the binary's GPG
+          # signature self-check, which is unreliable on the runners.
+          use_pypi: true
+          fail_ci_if_error: true
 
 
 
