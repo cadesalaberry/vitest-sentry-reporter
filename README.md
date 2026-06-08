@@ -141,3 +141,32 @@ cp docs/decisions/adr-template.md docs/decisions/0001-short-title.md
 
 The initial ADR adopting MADR lives at `docs/decisions/0000-use-markdown-architectural-decision-records.md`.
 
+## Releasing
+
+Releases are automated from [Conventional Commits](https://www.conventionalcommits.org/)
+using [release-please](https://github.com/googleapis/release-please). You do not
+bump the version or edit `CHANGELOG.md` by hand.
+
+How it works:
+
+1. Merge your work into `main` using Conventional Commit messages (see
+   `docs/COMMIT_CONVENTION.md`). `feat:` → minor, `fix:` → patch,
+   `!`/`BREAKING CHANGE:` → major.
+2. release-please opens (and keeps updating) a **release PR** that bumps
+   `version` in `package.json` and updates `CHANGELOG.md`.
+3. Merge the release PR when you want to ship. That creates the `vX.Y.Z` git tag
+   and a GitHub release, and automatically publishes the package to npm with
+   provenance.
+
+Configuration lives in `release-please-config.json` and the current released
+version is tracked in `.release-please-manifest.json`. See
+`docs/decisions/0004-automate-releases-with-release-please.md` for the rationale.
+
+### One-time repository setup
+
+- Add an **`NPM_TOKEN`** secret (an npm automation/granular token with publish
+  access) under Settings → Secrets and variables → Actions.
+- Enable **Allow GitHub Actions to create and approve pull requests** under
+  Settings → Actions → General → Workflow permissions, so release-please can
+  open its release PR.
+
