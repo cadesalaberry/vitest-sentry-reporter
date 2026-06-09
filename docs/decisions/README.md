@@ -17,6 +17,7 @@ This directory contains Architectural Decision Records using MADR (Markdown Arch
 | [0004](0004-migrate-to-vitest-4-reported-tasks-api.md) | Migrate the reporter to the Vitest 4 reported-tasks API | accepted | 2026-06-07 |
 | [0005](0005-support-vitest-3.md) | Support Vitest 3 by relaxing the peer dependency range | accepted | 2026-06-07 |
 | [0006](0006-automate-releases-with-release-please.md) | Automate releases with release-please and Conventional Commits | accepted | 2026-06-08 |
+| [0007](0007-adopt-biome-for-lint-and-format.md) | Adopt Biome for linting and formatting | accepted | 2026-06-09 |
 
 ADRs are numbered sequentially in the chronological order in which they were decided.
 
