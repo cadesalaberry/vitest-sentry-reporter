@@ -15,15 +15,10 @@ Security fixes are applied to the latest released minor version.
 **Please do not report security vulnerabilities through public GitHub issues,
 discussions, or pull requests.**
 
-Instead, report them privately through GitHub's
-[private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability):
-
-1. Go to the **[Security](https://github.com/cadesalaberry/vitest-sentry-reporter/security)**
-   tab of this repository.
-2. Click **Report a vulnerability** to open a private advisory.
-
-> **Maintainers:** enable this under **Settings → Code security and analysis →
-> Private vulnerability reporting** so the link above works.
+Instead, email **[security@c4labz.com](mailto:security@c4labz.com)** with the
+details. If you prefer, you can also use GitHub's
+[private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
+from the repository's **Security** tab.
 
 Please include:
 
