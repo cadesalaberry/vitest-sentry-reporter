@@ -40,7 +40,13 @@ jobs:
         run: bun run test:coverage
 
       - name: Upload coverage to Codecov
-        if: matrix.vitest == '4'
+        # Dependabot-triggered runs have no access to repository Actions
+        # secrets, so CODECOV_TOKEN is empty and the upload falls back to a
+        # tokenless attempt. Codecov rejects tokenless uploads for same-repo
+        # branches ("Token required because branch is protected"), which then
+        # fails the job via fail_ci_if_error. Skip the upload for Dependabot;
+        # coverage is still uploaded on main pushes and regular PRs.
+        if: matrix.vitest == '4' && github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
