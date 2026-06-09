@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.0.2...v1.0.3) (2026-06-09)
+
+
+### 🐛 Bug Fixes
+
+* **release:** 🐛 enforce frozen lockfile in CI to unblock npm publish ([#23](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/23)) ([b8e16db](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/b8e16dbed7106c1c0a6ee0885b3b7209858a5a2b))
+
 ## [1.0.2](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.0.1...v1.0.2) (2026-06-09)
 
 
