@@ -160,12 +160,15 @@ How it works:
 
 Configuration lives in `release-please-config.json` and the current released
 version is tracked in `.release-please-manifest.json`. See
-`docs/decisions/0004-automate-releases-with-release-please.md` for the rationale.
+`docs/decisions/0006-automate-releases-with-release-please.md` for the rationale.
 
 ### One-time repository setup
 
-- Add an **`NPM_TOKEN`** secret (an npm automation/granular token with publish
-  access) under Settings → Secrets and variables → Actions.
+- Configure **npm Trusted Publishing** for the package: on npmjs.com open the
+  package → Settings → Trusted Publishers and add a GitHub Actions publisher for
+  repo `cadesalaberry/vitest-sentry-reporter` and workflow `release.yml`.
+  Publishing then uses short-lived OIDC credentials, so there is no `NPM_TOKEN`
+  secret to store or rotate and it is not blocked by account 2FA.
 - Enable **Allow GitHub Actions to create and approve pull requests** under
   Settings → Actions → General → Workflow permissions, so release-please can
   open its release PR.

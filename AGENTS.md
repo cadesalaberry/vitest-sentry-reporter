@@ -60,4 +60,4 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 - Releases are automated with release-please from Conventional Commits. Do not bump `version` in `package.json` or edit `CHANGELOG.md` by hand — release-please maintains both via a release PR.
 - Merging the release PR tags `vX.Y.Z`, creates a GitHub release, and publishes to npm with provenance (`.github/workflows/release.yml`).
 - The version bump is derived from commit types: `feat` → minor, `fix` → patch, `!`/`BREAKING CHANGE:` → major. Use the correct type so the bump is correct.
-- See `docs/decisions/0004-automate-releases-with-release-please.md` for details and required repo setup (`NPM_TOKEN` secret, PR-creation permission).
+- See `docs/decisions/0006-automate-releases-with-release-please.md` for details and required repo setup (npm Trusted Publishing, PR-creation permission).
