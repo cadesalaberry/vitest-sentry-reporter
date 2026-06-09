@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "bun build --target=node --format=esm --outdir=dist src/index.ts && bun run build:types",
+    "build": "bun build --target=node --format=esm --packages=external --outdir=dist src/index.ts && bun run build:types",
     "build:types": "tsc --emitDeclarationOnly",
     "prepublishOnly": "bun run build",
     "test": "vitest",
@@ -35,8 +35,7 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE",
-    "docs/decisions"
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18",
