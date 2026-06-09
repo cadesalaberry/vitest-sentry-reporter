@@ -11,10 +11,11 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 
 ## Setup commands
 
-- Install deps: `bun install`
+- Install deps (also installs git hooks): `bun install`
 - Build library: `bun run build`
-- Run tests (placeholder until tests are added): `bun run test run`
-- Prepare step (informational): `bun run prepare`
+- Run tests: `bun run test run`
+- Lint + format check (what CI runs): `bun run check`
+- Auto-fix lint + format: `bun run check:fix`
 
 ## Dev workflow tips
 
@@ -27,6 +28,7 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 - TypeScript, ESM modules.
 - Favor explicit types for public APIs and meaningful, descriptive names.
 - Use early returns, shallow control flow, and avoid swallowing errors.
+- Linting and formatting are enforced by [Biome](https://biomejs.dev) — run `bun run check` (or `bun run check:fix`). A pre-commit hook (lefthook) runs Biome on staged files. See [docs/decisions/0007-adopt-biome-for-lint-and-format.md](docs/decisions/0007-adopt-biome-for-lint-and-format.md).
 - Keep formatting consistent with existing files (single quotes are preferred where practical).
 - Avoid adding dependencies unless necessary; prefer small, focused utilities.
 
@@ -37,11 +39,10 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 
 ## Testing instructions
 
-- Test runner: Vitest (already a dev dependency). No tests exist yet.
-- When adding tests:
-  - Prefer lace unit tests alongside source.
-  - Prefer fast, deterministic tests with clear assertions.
-  - You can invoke Vitest directly if needed: `bun run test run --reporter=dot`
+- Test runner: Vitest. Tests live alongside the source as `src/**/*.test.ts` (and `scripts/**/*.test.ts`).
+- Run the suite with `bun run test run`; collect coverage with `bun run test:coverage`.
+- Prefer unit tests alongside source, and fast, deterministic tests with clear assertions.
+- You can invoke Vitest directly if needed: `bun run test run --reporter=dot`
 
 ## Security considerations
 
@@ -50,8 +51,9 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 
 ## PR checklist (for agents)
 
+- Lint + format clean: `bun run check`.
 - Build succeeds: `bun run build`.
-- Tests pass (once present): `bun run test run`.
+- Tests pass: `bun run test run`.
 - Types are accurate and exported via `dist/index.d.ts`.
 - Keep changes minimal; update docs if behavior changes.
 
@@ -60,4 +62,4 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 - Releases are automated with release-please from Conventional Commits. Do not bump `version` in `package.json` or edit `CHANGELOG.md` by hand — release-please maintains both via a release PR.
 - Merging the release PR tags `vX.Y.Z`, creates a GitHub release, and publishes to npm with provenance (`.github/workflows/release.yml`).
 - The version bump is derived from commit types: `feat` → minor, `fix` → patch, `!`/`BREAKING CHANGE:` → major. Use the correct type so the bump is correct.
-- See `docs/decisions/0004-automate-releases-with-release-please.md` for details and required repo setup (`NPM_TOKEN` secret, PR-creation permission).
+- See `docs/decisions/0006-automate-releases-with-release-please.md` for details and required repo setup (`NPM_TOKEN` secret, PR-creation permission).

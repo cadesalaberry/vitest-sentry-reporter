@@ -1,8 +1,8 @@
-import * as os from 'os';
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
+import * as os from 'node:os';
 import type { TestCase, TestModule, TestSuite } from 'vitest/node';
-import type { Primitive, FailureContext } from './types.js';
 import { detectProvider } from './ci-providers/index.js';
+import type { FailureContext, Primitive } from './types.js';
 
 export function toErrorMessage(err: unknown): string | undefined {
   if (!err) return undefined;
@@ -36,7 +36,10 @@ export function collectSuitePath(testCase: TestCase): string[] {
  * {@link FailureContext}. `logs` are collected separately via the
  * `onUserConsoleLog` reporter hook and threaded in by the caller.
  */
-export function toFailureContext(testCase: TestCase, logs?: string[]): FailureContext {
+export function toFailureContext(
+  testCase: TestCase,
+  logs?: string[],
+): FailureContext {
   const result = testCase.result();
   const diagnostic = testCase.diagnostic();
   const firstErr = result.errors?.[0];
@@ -60,7 +63,9 @@ export function toFailureContext(testCase: TestCase, logs?: string[]): FailureCo
 }
 
 export function ciProvider(): string | undefined {
-  return detectProvider(process.env)?.name ?? (process.env.CI ? 'ci' : undefined);
+  return (
+    detectProvider(process.env)?.name ?? (process.env.CI ? 'ci' : undefined)
+  );
 }
 
 export function repository(): string | undefined {
@@ -99,7 +104,9 @@ function providerEnvSnapshot(): Record<string, string | undefined> {
   return process.env.CI ? { CI: process.env.CI } : {};
 }
 
-export function cleanRecord(obj?: Record<string, unknown>): Record<string, Primitive> {
+export function cleanRecord(
+  obj?: Record<string, unknown>,
+): Record<string, Primitive> {
   const out: Record<string, Primitive> = {};
   if (!obj) return out;
   for (const [k, v] of Object.entries(obj)) {
@@ -136,5 +143,3 @@ export function extras(ctx: FailureContext): Record<string, unknown> {
     env: providerEnvSnapshot(),
   };
 }
-
-

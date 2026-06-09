@@ -1,10 +1,10 @@
-import type { CIProvider } from './types.js';
-import { GitHubActionsProvider } from './github.js';
-import { CircleCIProvider } from './circleci.js';
 import { BuildkiteProvider } from './buildkite.js';
+import { CircleCIProvider } from './circleci.js';
+import { GenericCIProvider } from './generic.js';
+import { GitHubActionsProvider } from './github.js';
 import { GitLabCIProvider } from './gitlab.js';
 import { JenkinsProvider } from './jenkins.js';
-import { GenericCIProvider } from './generic.js';
+import type { CIProvider } from './types.js';
 
 const PROVIDERS: CIProvider[] = [
   GitHubActionsProvider,
@@ -22,14 +22,12 @@ export function detectProvider(env: NodeJS.ProcessEnv): CIProvider | undefined {
   return undefined;
 }
 
-export { type CIProvider } from './types.js';
+export type { CIProvider } from './types.js';
 export {
-  GitHubActionsProvider,
-  CircleCIProvider,
   BuildkiteProvider,
+  CircleCIProvider,
+  GenericCIProvider,
+  GitHubActionsProvider,
   GitLabCIProvider,
   JenkinsProvider,
-  GenericCIProvider,
 };
-
-
