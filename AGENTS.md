@@ -7,7 +7,7 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 - Library: Vitest reporter that sends failures/context to Sentry.
 - Runtime: Node >= 18; ESM output.
 - Package manager: Bun (see `engines.bun`).
-- Entry points: `src/index.ts` → builds to `dist/index.js`; types in `types/index.d.ts`.
+- Entry points: `src/index.ts` → builds to `dist/index.js`; type declarations emit to `dist/index.d.ts`.
 
 ## Setup commands
 
@@ -19,7 +19,7 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 ## Dev workflow tips
 
 - Source lives in `src/`; build emits to `dist/` via Bun bundler (`bun build`).
-- Types are published from `types/` and referenced by `types/index.d.ts`.
+- Type declarations are emitted to `dist/` by `tsc --emitDeclarationOnly` and referenced by `package.json` `types` (`dist/index.d.ts`).
 - Keep the build green before publishing; `prepublishOnly` runs the build automatically.
 
 ## Code style and conventions
@@ -52,9 +52,12 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 
 - Build succeeds: `bun run build`.
 - Tests pass (once present): `bun run test run`.
-- Types are accurate and exported via `types/index.d.ts`.
+- Types are accurate and exported via `dist/index.d.ts`.
 - Keep changes minimal; update docs if behavior changes.
 
 ## Release notes
 
-- Package is configured for public publish. `prepublishOnly` runs the build automatically. Ensure `dist/` and `types/` are up to date.
+- Releases are automated with release-please from Conventional Commits. Do not bump `version` in `package.json` or edit `CHANGELOG.md` by hand — release-please maintains both via a release PR.
+- Merging the release PR tags `vX.Y.Z`, creates a GitHub release, and publishes to npm with provenance (`.github/workflows/release.yml`).
+- The version bump is derived from commit types: `feat` → minor, `fix` → patch, `!`/`BREAKING CHANGE:` → major. Use the correct type so the bump is correct.
+- See `docs/decisions/0004-automate-releases-with-release-please.md` for details and required repo setup (`NPM_TOKEN` secret, PR-creation permission).
