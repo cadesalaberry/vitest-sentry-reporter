@@ -9,13 +9,9 @@ export const GenericCIProvider: CIProvider = {
   runUrl: (_env) => undefined,
   workflowId: (_env) => undefined,
   envSnapshot: (env) => {
-    const keys = [
-      'CI',
-    ];
+    const keys = ['CI'];
     const out: Record<string, string | undefined> = {};
     for (const k of keys) out[k] = env[k];
     return out;
   },
 };
-
-

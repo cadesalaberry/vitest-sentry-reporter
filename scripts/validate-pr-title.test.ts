@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { validatePrTitle, ALLOWED_TYPES } from './validate-pr-title';
+import { describe, expect, it } from 'vitest';
+import { ALLOWED_TYPES, validatePrTitle } from './validate-pr-title';
 
 describe('validatePrTitle', () => {
   describe('valid titles', () => {

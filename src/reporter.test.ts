@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TestCase, TestModule } from 'vitest/node';
 
 const sentry = vi.hoisted(() => ({
@@ -20,7 +20,9 @@ const sentry = vi.hoisted(() => ({
 vi.mock('@sentry/node', () => sentry);
 
 // Keep CI/provider detection deterministic and quiet.
-vi.mock('./ci-providers/index.js', () => ({ detectProvider: vi.fn(() => undefined) }));
+vi.mock('./ci-providers/index.js', () => ({
+  detectProvider: vi.fn(() => undefined),
+}));
 
 import VitestSentryReporter from './reporter.js';
 
@@ -41,7 +43,10 @@ function makeTestCase(opts: {
     parent: { type: 'module' as const },
     result: () => ({
       state: opts.state ?? 'failed',
-      errors: opts.state === 'passed' ? [] : [{ message: opts.message ?? 'boom', stack: 'STACK' }],
+      errors:
+        opts.state === 'passed'
+          ? []
+          : [{ message: opts.message ?? 'boom', stack: 'STACK' }],
     }),
     diagnostic: () => ({ duration: 1, retryCount: 0, flaky: false }),
   } as unknown as TestCase;
@@ -129,7 +134,11 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     const reported = makeTestCase({ id: 't1', name: 'keep-me' });
     const skipped = makeTestCase({ id: 't2', name: 'skip-me' });
 
-    await reporter.onTestRunEnd([makeModule([reported, skipped])], [], 'failed');
+    await reporter.onTestRunEnd(
+      [makeModule([reported, skipped])],
+      [],
+      'failed',
+    );
 
     expect(sentry.captureException).toHaveBeenCalledTimes(1);
   });
@@ -150,7 +159,11 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     const reporter = new VitestSentryReporter({ dsn: DSN });
     const failed = makeTestCase({ id: 't1' });
 
-    reporter.onUserConsoleLog({ taskId: 't1', type: 'stdout', content: 'hello from test' });
+    reporter.onUserConsoleLog({
+      taskId: 't1',
+      type: 'stdout',
+      content: 'hello from test',
+    });
     reporter.onTestCaseResult(failed);
     await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
 

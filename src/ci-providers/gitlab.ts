@@ -21,5 +21,3 @@ export const GitLabCIProvider: CIProvider = {
     return out;
   },
 };
-
-

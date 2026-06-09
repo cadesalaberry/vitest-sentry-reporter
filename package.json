@@ -5,15 +5,28 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "build": "bun build --target=node --format=esm --outdir=dist src/index.ts && bun run build:types",
+    "build": "bun build --target=node --format=esm --packages=external --outdir=dist src/index.ts && bun run build:types",
     "build:types": "tsc --emitDeclarationOnly",
     "prepublishOnly": "bun run build",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:dogfood": "DOGFOOD=true bun run test run",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
     "validate:pr-title": "bun run scripts/validate-pr-title.ts",
-    "prepare": "echo \"Using Bun as the package manager\""
+    "validate:commit-msg": "bun run scripts/validate-commit-msg.ts",
+    "prepare": "lefthook install || true"
   },
   "keywords": [
     "vitest",
@@ -35,8 +48,7 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE",
-    "docs/decisions"
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18",
@@ -51,9 +63,11 @@
     "vitest": ">=3.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
     "@sentry/node": "^10.27.0",
     "@types/node": "^18",
     "@vitest/coverage-v8": "^4.0.13",
+    "lefthook": "^2.1.9",
     "typescript": "^5.9.3",
     "vitest": "^4.0.13"
   }

@@ -1,9 +1,27 @@
-import { init, flush, withScope, captureException } from '@sentry/node';
 import type { NodeOptions } from '@sentry/node';
-import type { Reporter, TestCase, TestModule, TestRunEndReason, SerializedError } from 'vitest/node';
+import { captureException, flush, init, withScope } from '@sentry/node';
+import type {
+  Reporter,
+  SerializedError,
+  TestCase,
+  TestModule,
+  TestRunEndReason,
+} from 'vitest/node';
 import { makeDryRunTransport } from './dry-run-transport.js';
-import type { FailureContext, VitestSentryReporterOptions, VitestUserConsoleLog, Primitive } from './types.js';
-import { toFailureContext, baseTags, cleanRecord, extras, inferEnvironment, commitSha } from './utils.js';
+import type {
+  FailureContext,
+  Primitive,
+  VitestSentryReporterOptions,
+  VitestUserConsoleLog,
+} from './types.js';
+import {
+  baseTags,
+  cleanRecord,
+  commitSha,
+  extras,
+  inferEnvironment,
+  toFailureContext,
+} from './utils.js';
 
 export class VitestSentryReporter implements Reporter {
   public name: string;
@@ -80,7 +98,9 @@ export class VitestSentryReporter implements Reporter {
   }
 
   private enqueueFailure(ctx: FailureContext): void {
-    const shouldReport = this.options.shouldReport ? this.options.shouldReport(ctx) : true;
+    const shouldReport = this.options.shouldReport
+      ? this.options.shouldReport(ctx)
+      : true;
     if (!shouldReport) return;
     this.queued.push(ctx);
   }
@@ -110,7 +130,8 @@ export class VitestSentryReporter implements Reporter {
       flaky: ctx.flaky,
     };
 
-    const error = (ctx.error instanceof Error)
+    const error =
+      ctx.error instanceof Error
         ? ctx.error
         : new Error(ctx.message ?? ctx.fullTitle ?? ctx.testName);
 
@@ -127,7 +148,8 @@ export class VitestSentryReporter implements Reporter {
     }
 
     if (ctx.error && typeof ctx.error === 'object') {
-      if ('name' in ctx.error) error.name = String((ctx.error as { name: unknown }).name);
+      if ('name' in ctx.error)
+        error.name = String((ctx.error as { name: unknown }).name);
     }
 
     withScope((scope) => {
@@ -140,7 +162,8 @@ export class VitestSentryReporter implements Reporter {
       if (user) scope.setUser(user);
 
       if (this.options.beforeSend) {
-        scope.addEventProcessor((event, hint) => this.options.beforeSend!(event, hint, ctx));
+        const beforeSend = this.options.beforeSend;
+        scope.addEventProcessor((event, hint) => beforeSend(event, hint, ctx));
       }
 
       captureException(error);
@@ -151,17 +174,32 @@ export class VitestSentryReporter implements Reporter {
     if (this.initialized) return;
     const providedDsn = this.options.dsn ?? process.env.SENTRY_DSN;
     const isDryRun = Boolean(this.options.dryRun);
-    const dsn = providedDsn ?? (isDryRun ? 'https://examplePublicKey@o0.ingest.sentry.io/0' : undefined);
+    const dsn =
+      providedDsn ??
+      (isDryRun ? 'https://examplePublicKey@o0.ingest.sentry.io/0' : undefined);
     if (!dsn) {
       this.enabled = false;
       // eslint-disable-next-line no-console
-      console.warn('[vitest-sentry-reporter] SENTRY_DSN missing; reporter disabled');
+      console.warn(
+        '[vitest-sentry-reporter] SENTRY_DSN missing; reporter disabled',
+      );
       return;
     }
 
-    if (isDryRun) console.log('[vitest-sentry-reporter] initializing Sentry with DSN:', dsn);
-    const environment = this.options.environment ?? process.env.SENTRY_ENVIRONMENT ?? inferEnvironment();
-    const release = this.options.release ?? process.env.SENTRY_RELEASE ?? commitSha() ?? undefined;
+    if (isDryRun)
+      console.log(
+        '[vitest-sentry-reporter] initializing Sentry with DSN:',
+        dsn,
+      );
+    const environment =
+      this.options.environment ??
+      process.env.SENTRY_ENVIRONMENT ??
+      inferEnvironment();
+    const release =
+      this.options.release ??
+      process.env.SENTRY_RELEASE ??
+      commitSha() ??
+      undefined;
 
     const minimalIntegrationNames = new Set([
       'InboundFilters',
@@ -177,7 +215,10 @@ export class VitestSentryReporter implements Reporter {
       release,
       dist: release,
       debug: isDryRun,
-      integrations: (defaults) => defaults.filter((integration) => minimalIntegrationNames.has(integration.name)),
+      integrations: (defaults) =>
+        defaults.filter((integration) =>
+          minimalIntegrationNames.has(integration.name),
+        ),
       tracesSampleRate: 0,
       ...(this.options.sentryOptions ?? {}),
     };
@@ -199,5 +240,3 @@ export class VitestSentryReporter implements Reporter {
 }
 
 export default VitestSentryReporter;
-
-

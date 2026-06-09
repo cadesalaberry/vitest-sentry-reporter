@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeDryRunTransport } from './dry-run-transport.js';
 
 // Minimal envelope helpers for tests
@@ -34,7 +34,7 @@ describe('makeDryRunTransport', () => {
     expect(calls.length).toBe(1);
     expect(calls[0][0]).toContain('dryRun transport – would send:');
     expect(typeof calls[0][1]).toBe('string');
-    expect(calls[0][1]).toContain("Event[");
+    expect(calls[0][1]).toContain('Event[');
     expect(calls[0][1]).toContain("- test_file: '/tests/example.test.ts'");
   });
 
@@ -48,9 +48,8 @@ describe('makeDryRunTransport', () => {
     const transport = makeDryRunTransport();
     await expect(transport.flush(10)).resolves.toBe(true);
     const calls = (console.warn as any).mock.calls;
-    expect(calls[calls.length - 1][0]).toContain('dryRun transport – would flush');
+    expect(calls[calls.length - 1][0]).toContain(
+      'dryRun transport – would flush',
+    );
   });
 });
-
-
-

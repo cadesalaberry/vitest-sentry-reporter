@@ -61,12 +61,18 @@ export type VitestSentryReporterOptions = {
   /**
    * Associate a user with the event (useful for local runs).
    */
-  getUser?: (ctx: FailureContext) => { id?: string; email?: string; username?: string } | undefined;
+  getUser?: (
+    ctx: FailureContext,
+  ) => { id?: string; email?: string; username?: string } | undefined;
   /**
    * Final event mutation hook, applied via scope event processor before sending.
    * Return the modified event or `null` to drop it.
    */
-  beforeSend?: (event: Sentry.Event, hint: Sentry.EventHint, ctx: FailureContext) => Sentry.Event | null;
+  beforeSend?: (
+    event: Sentry.Event,
+    hint: Sentry.EventHint,
+    ctx: FailureContext,
+  ) => Sentry.Event | null;
   /**
    * Upper bound on number of events sent in a single Vitest run. Useful to cap noise in very large suites.
    */

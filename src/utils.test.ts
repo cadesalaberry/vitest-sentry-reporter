@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock CI provider and OS to keep tests deterministic
 vi.mock('./ci-providers/index.js', () => {
@@ -12,22 +12,22 @@ vi.mock('os', () => {
   };
 });
 
-import {
-  toErrorMessage,
-  toStack,
-  collectSuitePath,
-  toFailureContext,
-  ciProvider,
-  repository,
-  branch,
-  commitSha,
-  inferEnvironment,
-  vitestVersion,
-  cleanRecord,
-  baseTags,
-  extras,
-} from './utils';
 import type { TestCase } from 'vitest/node';
+import {
+  baseTags,
+  branch,
+  ciProvider,
+  cleanRecord,
+  collectSuitePath,
+  commitSha,
+  extras,
+  inferEnvironment,
+  repository,
+  toErrorMessage,
+  toFailureContext,
+  toStack,
+  vitestVersion,
+} from './utils';
 
 type AnyFn = (...args: unknown[]) => unknown;
 
@@ -35,19 +35,21 @@ type AnyFn = (...args: unknown[]) => unknown;
  * Build a minimal object that quacks like a finished Vitest {@link TestCase},
  * exposing only the surface the reporter reads.
  */
-function makeTestCase(overrides: {
-  id?: string;
-  name?: string;
-  fullName?: string;
-  moduleId?: string;
-  suiteNames?: string[];
-  state?: 'failed' | 'passed';
-  errors?: Array<{ message?: string; stack?: string; name?: string }>;
-  duration?: number;
-  retryCount?: number;
-  flaky?: boolean;
-  projectName?: string;
-} = {}): TestCase {
+function makeTestCase(
+  overrides: {
+    id?: string;
+    name?: string;
+    fullName?: string;
+    moduleId?: string;
+    suiteNames?: string[];
+    state?: 'failed' | 'passed';
+    errors?: Array<{ message?: string; stack?: string; name?: string }>;
+    duration?: number;
+    retryCount?: number;
+    flaky?: boolean;
+    projectName?: string;
+  } = {},
+): TestCase {
   const moduleNode = { type: 'module' as const };
   // Build the suite chain innermost-last so the parent walk yields outermost-first.
   let parent: unknown = moduleNode;
@@ -61,7 +63,10 @@ function makeTestCase(overrides: {
     module: { moduleId: overrides.moduleId ?? '/tests/x.test.ts' },
     project: { name: overrides.projectName ?? 'unit' },
     parent,
-    result: () => ({ state: overrides.state ?? 'failed', errors: overrides.errors ?? [] }),
+    result: () => ({
+      state: overrides.state ?? 'failed',
+      errors: overrides.errors ?? [],
+    }),
     diagnostic: () => ({
       duration: overrides.duration ?? 0,
       retryCount: overrides.retryCount ?? 0,
@@ -72,7 +77,7 @@ function makeTestCase(overrides: {
 
 async function getDetectProviderMock(): Promise<AnyFn> {
   const mod = await import('./ci-providers/index.js');
-  return (mod.detectProvider as unknown as AnyFn);
+  return mod.detectProvider as unknown as AnyFn;
 }
 
 describe('utils', () => {
@@ -145,9 +150,21 @@ describe('utils', () => {
   });
 
   it('cleanRecord drops nullish values and stringifies objects', () => {
-    const input = { a: 1, b: null, c: undefined, d: { x: true }, e: 'ok', f: false } as Record<string, unknown>;
+    const input = {
+      a: 1,
+      b: null,
+      c: undefined,
+      d: { x: true },
+      e: 'ok',
+      f: false,
+    } as Record<string, unknown>;
     const out = cleanRecord(input);
-    expect(out).toEqual({ a: 1, d: JSON.stringify({ x: true }), e: 'ok', f: false });
+    expect(out).toEqual({
+      a: 1,
+      d: JSON.stringify({ x: true }),
+      e: 'ok',
+      f: false,
+    });
   });
 
   it('ciProvider and repo info come from provider when available', async () => {
@@ -201,7 +218,13 @@ describe('utils', () => {
       commitSha: () => 'abc123',
     });
 
-    const ctx = { testName: 't', filePath: '/x', fullTitle: 'full', flaky: true, retry: 2 } as import('./types').FailureContext;
+    const ctx = {
+      testName: 't',
+      filePath: '/x',
+      fullTitle: 'full',
+      flaky: true,
+      retry: 2,
+    } as import('./types').FailureContext;
     const tags = baseTags(ctx);
     expect(tags).toEqual(
       expect.objectContaining({
@@ -243,10 +266,10 @@ describe('utils', () => {
         suite_path: ['s'],
       }),
     );
-    expect(typeof (ex as any).vitest_version === 'string' || (ex as any).vitest_version === undefined).toBe(true);
+    expect(
+      typeof (ex as any).vitest_version === 'string' ||
+        (ex as any).vitest_version === undefined,
+    ).toBe(true);
     expect((ex as any).env).toEqual({ CI: 'true', GIT: '1' });
   });
 });
-
-
-
