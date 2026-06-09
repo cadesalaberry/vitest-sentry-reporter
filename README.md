@@ -1,6 +1,10 @@
 # vitest-sentry-reporter
 
+[![npm version](https://img.shields.io/npm/v/vitest-sentry-reporter.svg)](https://www.npmjs.com/package/vitest-sentry-reporter)
+[![npm downloads](https://img.shields.io/npm/dm/vitest-sentry-reporter.svg)](https://www.npmjs.com/package/vitest-sentry-reporter)
+[![CI](https://github.com/cadesalaberry/vitest-sentry-reporter/actions/workflows/ci.yml/badge.svg)](https://github.com/cadesalaberry/vitest-sentry-reporter/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/cadesalaberry/vitest-sentry-reporter/graph/badge.svg)](https://codecov.io/gh/cadesalaberry/vitest-sentry-reporter)
+[![License: MIT](https://img.shields.io/npm/l/vitest-sentry-reporter.svg)](LICENSE)
 
 Uses Sentry to collect software defects and orchestrate its correction.
 
@@ -120,6 +124,12 @@ Use the `tags.project` field and/or `getTags` to inject a stable project identif
 
 MIT
 
+## Contributing
+
+Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md)
+to get started, and note our [Code of Conduct](CODE_OF_CONDUCT.md). For security
+issues, see the [Security Policy](SECURITY.md); for help, see [Support](SUPPORT.md).
+
 ## Architectural Decision Records (ADR)
 
 We record architectural decisions using MADR (Markdown Architectural Decision Records).
@@ -160,7 +170,7 @@ How it works:
 
 Configuration lives in `release-please-config.json` and the current released
 version is tracked in `.release-please-manifest.json`. See
-`docs/decisions/0004-automate-releases-with-release-please.md` for the rationale.
+`docs/decisions/0006-automate-releases-with-release-please.md` for the rationale.
 
 ### One-time repository setup
 
