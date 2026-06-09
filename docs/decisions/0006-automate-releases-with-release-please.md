@@ -1,7 +1,10 @@
-# Automate releases with release-please and Conventional Commits
-
-- Status: accepted
-- Date: 2026-06-08
+---
+title: Automate releases with release-please and Conventional Commits
+status: accepted
+date: 2026-06-08
+authors:
+  - cadesalaberry
+---
 
 ## Context
 
