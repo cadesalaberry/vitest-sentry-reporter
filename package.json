@@ -12,6 +12,7 @@
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:dogfood": "DOGFOOD=true bun run test run",
+    "validate:pr-title": "bun run scripts/validate-pr-title.ts",
     "prepare": "echo \"Using Bun as the package manager\""
   },
   "keywords": [
