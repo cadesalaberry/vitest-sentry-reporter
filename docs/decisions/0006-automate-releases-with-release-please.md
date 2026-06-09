@@ -49,6 +49,17 @@ Gitmoji placed after the `type(scope):` prefix does not interfere with commit
 parsing — the type/scope are read from the prefix, and the emoji simply appears
 in the changelog description, which matches the project's existing style.
 
+### CI installs with a frozen lockfile
+
+The publish job installs with `bun install --frozen-lockfile` so the published
+build is reproducible. CI (`.github/workflows/ci.yml`) installs the same way, so
+the two stay in lockstep. This matters because a stale `bun.lock` — e.g. a
+Dependabot bump that updates `package.json` but not the lockfile — would
+otherwise pass a non-frozen CI install, land on `main`, and only surface at
+release time when the publish job's frozen install rejects it — which is what
+broke the 1.0.2 deploy. Enforcing frozen installs everywhere makes lockfile
+drift fail loudly on the offending PR instead of silently reaching a release tag.
+
 ### Required repository configuration
 
 - **npm Trusted Publisher**: on npmjs.com, open the package → Settings →
@@ -72,6 +83,11 @@ in the changelog description, which matches the project's existing style.
 - Release PRs opened by the default `GITHUB_TOKEN` do not themselves trigger the
   CI workflow. CI already runs on the underlying feature commits; if CI on the
   release PR is desired later, switch release-please to a PAT or app token.
+- Because CI now installs frozen, a Dependabot npm PR that bumps `package.json`
+  without updating `bun.lock` will fail CI until the lockfile is regenerated
+  (`bun install` and commit `bun.lock`). This is the intended signal; if it
+  becomes noisy, migrate dependency updates to Renovate, which has mature Bun
+  support (see `.github/dependabot.yml`).
 
 ## References
 
