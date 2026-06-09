@@ -1,7 +1,10 @@
-# Adopt Bun as the package manager and runtime
-
-- Status: accepted
-- Date: 2025-09-03
+---
+title: Adopt Bun as the package manager and runtime
+status: accepted
+date: 2025-09-03
+authors:
+  - cadesalaberry
+---
 
 ## Context
 

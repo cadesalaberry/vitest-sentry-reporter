@@ -1,7 +1,10 @@
-# Use Markdown Architectural Decision Records (MADR)
-
-- Status: accepted
-- Date: 2025-09-03
+---
+title: Use Markdown Architectural Decision Records (MADR)
+status: accepted
+date: 2025-09-03
+authors:
+  - cadesalaberry
+---
 
 ## Context
 
@@ -14,6 +17,7 @@ Adopt MADR (Markdown Architectural Decision Records) as our ADR format and proce
 - Store ADRs under `docs/decisions`
 - Use sequential, zero-padded numbering: `NNNN-short-title.md`
 - Start new ADRs from `docs/decisions/adr-template.md`
+- Capture metadata (`title`, `status`, `date`, `authors`) in YAML front matter
 - Use statuses: `proposed`, `accepted`, `rejected`, `deprecated`, `superseded`
 - When an ADR is superseded, link the successor in both directions
 
@@ -27,4 +31,3 @@ Adopt MADR (Markdown Architectural Decision Records) as our ADR format and proce
 
 - MADR documentation: https://adr.github.io/madr/
 - MADR repository: https://github.com/adr/madr
-

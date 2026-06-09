@@ -1,7 +1,10 @@
-# Migrate the reporter to the Vitest 4 reported-tasks API
-
-- Status: accepted
-- Date: 2026-06-07
+---
+title: Migrate the reporter to the Vitest 4 reported-tasks API
+status: accepted
+date: 2026-06-07
+authors:
+  - cadesalaberry
+---
 
 ## Context
 
