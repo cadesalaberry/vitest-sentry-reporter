@@ -21,14 +21,12 @@ const humanFriendlyEnvelopeToLog = (envelope: Envelope): string => {
       const message = event.message;
       const level = event.level ? LEVEL_TO_EMOJI[event.level] : '❓';
       const tags = event.tags;
-      const extra = event.extra;
       const test_file = event.tags?.test_file as string;
-
 
       return [
         `Event[${level}]: '${message}'`,
         `- test_file: '${test_file}'`,
-        `- tags: '${JSON.stringify(tags, null, 2)}'`
+        `- tags: '${JSON.stringify(tags, null, 2)}'`,
       ].join('\n');
     }
     return `[vitest-sentry-reporter] dryRun transport – would send: ${type} ${payload}`;
@@ -40,10 +38,16 @@ export function makeDryRunTransport() {
   return {
     send(envelope: Envelope) {
       try {
-        console.warn('[vitest-sentry-reporter] dryRun transport – would send:', humanFriendlyEnvelopeToLog(envelope));
+        console.warn(
+          '[vitest-sentry-reporter] dryRun transport – would send:',
+          humanFriendlyEnvelopeToLog(envelope),
+        );
       } catch (e) {
         // eslint-disable-next-line no-console
-        console.warn('[vitest-sentry-reporter] dryRun transport failed to log envelope', e);
+        console.warn(
+          '[vitest-sentry-reporter] dryRun transport failed to log envelope',
+          e,
+        );
       }
       return Promise.resolve({});
     },
@@ -53,5 +57,3 @@ export function makeDryRunTransport() {
     },
   };
 }
-
-

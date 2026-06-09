@@ -43,7 +43,10 @@ export function validatePrTitle(title: string): ValidationResult {
 
   const colonIndex = title.indexOf(':');
   if (colonIndex === -1) {
-    return { valid: false, error: "Missing ':'. Expected 'type(scope): description'." };
+    return {
+      valid: false,
+      error: "Missing ':'. Expected 'type(scope): description'.",
+    };
   }
 
   const header = title.slice(0, colonIndex); // type + optional scope + optional '!'
@@ -51,12 +54,18 @@ export function validatePrTitle(title: string): ValidationResult {
 
   // The colon must be followed by exactly one space.
   if (rest.length > 0 && !rest.startsWith(' ')) {
-    return { valid: false, error: "The colon must be followed by a space, e.g. 'fix: ...'." };
+    return {
+      valid: false,
+      error: "The colon must be followed by a space, e.g. 'fix: ...'.",
+    };
   }
 
   const description = rest.replace(/^ /, '');
   if (isBlank(description)) {
-    return { valid: false, error: 'Description is empty. Add a summary after the colon.' };
+    return {
+      valid: false,
+      error: 'Description is empty. Add a summary after the colon.',
+    };
   }
 
   // Strip an optional trailing '!' (breaking-change marker) before the colon.
@@ -67,10 +76,14 @@ export function validatePrTitle(title: string): ValidationResult {
     // Has a scope: must be exactly 'type(scope)' with a non-empty scope.
     const scopeMatch = /^([a-z]+)\(([^()]+)\)$/.exec(core);
     if (!scopeMatch) {
-      return { valid: false, error: "Malformed scope. Expected 'type(scope)', e.g. 'fix(reporter)'." };
+      return {
+        valid: false,
+        error: "Malformed scope. Expected 'type(scope)', e.g. 'fix(reporter)'.",
+      };
     }
-    type = scopeMatch[1]!;
-    if (isBlank(scopeMatch[2]!)) {
+    const [, scopeType, scope] = scopeMatch;
+    type = scopeType ?? core;
+    if (scope === undefined || isBlank(scope)) {
       return {
         valid: false,
         error: 'Scope is empty. Use a non-empty scope or drop the parentheses.',
@@ -79,7 +92,10 @@ export function validatePrTitle(title: string): ValidationResult {
   }
 
   if (!/^[a-z]+$/.test(type)) {
-    return { valid: false, error: `Type '${type}' is invalid. It must be lowercase letters only.` };
+    return {
+      valid: false,
+      error: `Type '${type}' is invalid. It must be lowercase letters only.`,
+    };
   }
 
   if (!(ALLOWED_TYPES as readonly string[]).includes(type)) {

@@ -11,5 +11,3 @@ export interface CIProvider {
    */
   envSnapshot(env: NodeJS.ProcessEnv): Record<string, string | undefined>;
 }
-
-

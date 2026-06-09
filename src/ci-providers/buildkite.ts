@@ -22,5 +22,3 @@ export const BuildkiteProvider: CIProvider = {
     return out;
   },
 };
-
-

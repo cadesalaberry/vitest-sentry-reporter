@@ -6,9 +6,10 @@ export const GitHubActionsProvider: CIProvider = {
   repository: (env) => env.GITHUB_REPOSITORY,
   branch: (env) => env.GITHUB_REF_NAME,
   commitSha: (env) => env.GITHUB_SHA,
-  runUrl: (env) => env.GITHUB_SERVER_URL && env.GITHUB_REPOSITORY && env.GITHUB_RUN_ID
-    ? `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`
-    : undefined,
+  runUrl: (env) =>
+    env.GITHUB_SERVER_URL && env.GITHUB_REPOSITORY && env.GITHUB_RUN_ID
+      ? `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`
+      : undefined,
   workflowId: (env) => env.GITHUB_RUN_ID,
   envSnapshot: (env) => {
     const keys = [
@@ -25,5 +26,3 @@ export const GitHubActionsProvider: CIProvider = {
     return out;
   },
 };
-
-
