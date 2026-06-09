@@ -27,6 +27,12 @@ jobs:
           manifest-file: .release-please-manifest.json
 
   # Publishes to npm only when release-please cut a new release.
+  #
+  # Auth is npm Trusted Publishing (OIDC) — there is no NPM_TOKEN secret. npm
+  # exchanges the GitHub OIDC token (id-token: write) for a short-lived, scoped
+  # publish credential and attaches build provenance automatically. This
+  # requires a Trusted Publisher to be configured for the package on npmjs.com
+  # (repo + this workflow file); see docs/decisions/0006-*.md.
   publish-npm:
     name: Publish to npm
     needs: release-please
@@ -34,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # required for npm provenance
+      id-token: write # required for OIDC trusted publishing + provenance
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,7 +62,9 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 20 ships npm 10.x.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

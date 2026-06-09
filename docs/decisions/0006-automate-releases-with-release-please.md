@@ -38,8 +38,12 @@ GitHub Actions workflow (`.github/workflows/release.yml`).
   first release PR only contains commits made after this system was introduced,
   rather than re-listing the whole history.
 - When release-please cuts a release, a second job publishes to npm with
-  `npm publish --provenance` (using `id-token: write` for provenance and the
-  `NPM_TOKEN` secret for authentication).
+  `npm publish --provenance`. Authentication uses npm Trusted Publishing
+  (OIDC): the `id-token: write` permission lets npm exchange the GitHub OIDC
+  token for a short-lived, scoped publish credential and attach provenance, so
+  no long-lived `NPM_TOKEN` secret is stored in the repo and publishing is not
+  blocked by account 2FA. This requires npm >= 11.5.1 on the runner, so the job
+  upgrades npm (Node 20 ships npm 10.x) before publishing.
 
 Gitmoji placed after the `type(scope):` prefix does not interfere with commit
 parsing — the type/scope are read from the prefix, and the emoji simply appears
@@ -47,7 +51,10 @@ in the changelog description, which matches the project's existing style.
 
 ### Required repository configuration
 
-- **`NPM_TOKEN`** secret: an npm automation/granular token with publish access.
+- **npm Trusted Publisher**: on npmjs.com, open the package → Settings →
+  Trusted Publishers and add a GitHub Actions publisher for repo
+  `cadesalaberry/vitest-sentry-reporter` and workflow `release.yml`. No
+  `NPM_TOKEN` secret is required, and publishing is not blocked by account 2FA.
 - **Allow GitHub Actions to create and approve pull requests**: enable under
   Settings → Actions → General → Workflow permissions, otherwise release-please
   cannot open its release PR with the default `GITHUB_TOKEN`.
@@ -72,5 +79,6 @@ in the changelog description, which matches the project's existing style.
 - release-please-action: https://github.com/googleapis/release-please-action
 - Conventional Commits: https://www.conventionalcommits.org/
 - npm provenance: https://docs.npmjs.com/generating-provenance-statements
+- npm trusted publishing (OIDC): https://docs.npmjs.com/trusted-publishers
 - ADR-0001: Adopt Bun as the package manager and runtime
 - `docs/COMMIT_CONVENTION.md`
