@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.2.21'
 
@@ -47,7 +47,7 @@ jobs:
         # fails the job via fail_ci_if_error. Skip the upload for Dependabot;
         # coverage is still uploaded on main pushes and regular PRs.
         if: matrix.vitest == '4' && github.actor != 'dependabot[bot]'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: cadesalaberry/vitest-sentry-reporter
@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.2.21'
 
