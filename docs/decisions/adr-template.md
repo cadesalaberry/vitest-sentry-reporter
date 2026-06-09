@@ -1,7 +1,10 @@
-# Title
-
-- Status: proposed
-- Date: YYYY-MM-DD
+---
+title: Short imperative title
+status: proposed
+date: YYYY-MM-DD
+authors:
+  - your-github-handle
+---
 
 ## Context
 
@@ -18,4 +21,3 @@ What becomes easier or harder because of this decision?
 ## References
 
 - Links to related ADRs, issues, docs, and external resources
-
