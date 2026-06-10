@@ -155,6 +155,61 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     expect(sentry.captureException).not.toHaveBeenCalled();
   });
 
+  it('reports detected trigger and actor tags on every failure', async () => {
+    const setTags = vi.fn();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb({
+        setTags,
+        setExtras: vi.fn(),
+        setContext: vi.fn(),
+        setFingerprint: vi.fn(),
+        setUser: vi.fn(),
+        addEventProcessor: vi.fn(),
+      }),
+    );
+    const reporter = new VitestSentryReporter({ dsn: DSN });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    expect(setTags).toHaveBeenCalledTimes(1);
+    const tags = setTags.mock.calls[0][0] as Record<string, unknown>;
+    expect(typeof tags.trigger).toBe('string');
+    expect(['ai', 'bot', 'human']).toContain(tags.actor_type);
+    expect(typeof tags.actor_name).toBe('string');
+  });
+
+  it('lets manually specified tags override detected trigger/actor markers', async () => {
+    const setTags = vi.fn();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb({
+        setTags,
+        setExtras: vi.fn(),
+        setContext: vi.fn(),
+        setFingerprint: vi.fn(),
+        setUser: vi.fn(),
+        addEventProcessor: vi.fn(),
+      }),
+    );
+    const reporter = new VitestSentryReporter({
+      dsn: DSN,
+      tags: { trigger: 'cron', actor_type: 'bot' },
+      getTags: () => ({ actor_name: 'nightly-canary' }),
+    });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    expect(setTags).toHaveBeenCalledTimes(1);
+    expect(setTags.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        trigger: 'cron',
+        actor_type: 'bot',
+        actor_name: 'nightly-canary',
+      }),
+    );
+  });
+
   it('attaches buffered console logs to the failure context', async () => {
     const reporter = new VitestSentryReporter({ dsn: DSN });
     const failed = makeTestCase({ id: 't1' });

@@ -1,8 +1,22 @@
 import { createRequire } from 'node:module';
 import * as os from 'node:os';
 import type { TestCase, TestModule, TestSuite } from 'vitest/node';
+import { detectActor } from './actor-detectors/index.js';
 import { detectProvider } from './ci-providers/index.js';
 import type { FailureContext, Primitive } from './types.js';
+
+/** Marker to manually pin the reported `trigger` tag (e.g. `ci`, `manual`, `cron`). */
+export const TRIGGER_ENV = 'VITEST_SENTRY_TRIGGER';
+
+/**
+ * Detected tags whose values yield to the same keys manually specified via the
+ * reporter's `tags`/`getTags` options.
+ */
+export const MANUALLY_OVERRIDABLE_TAGS = [
+  'trigger',
+  'actor_type',
+  'actor_name',
+] as const;
 
 export function toErrorMessage(err: unknown): string | undefined {
   if (!err) return undefined;
@@ -88,6 +102,16 @@ export function inferEnvironment(): string | undefined {
   return process.env.NODE_ENV || 'local';
 }
 
+/**
+ * How the test run was started: `ci` when a CI provider is detected, otherwise
+ * `manual`. Set the {@link TRIGGER_ENV} marker to override the detection.
+ */
+export function detectTrigger(env: NodeJS.ProcessEnv = process.env): string {
+  const manual = env[TRIGGER_ENV]?.trim();
+  if (manual) return manual;
+  return detectProvider(env) || env.CI ? 'ci' : 'manual';
+}
+
 export function vitestVersion(): string | undefined {
   try {
     const req = createRequire(import.meta.url);
@@ -117,6 +141,7 @@ export function cleanRecord(
 }
 
 export function baseTags(ctx: FailureContext): Record<string, Primitive> {
+  const actor = detectActor(process.env);
   return {
     reporter: 'vitest-sentry-reporter',
     test_file: ctx.filePath ?? 'unknown',
@@ -128,6 +153,9 @@ export function baseTags(ctx: FailureContext): Record<string, Primitive> {
     os_platform: os.platform(),
     os_release: os.release(),
     ci: ciProvider() ?? 'local',
+    trigger: detectTrigger(process.env),
+    actor_type: actor.type,
+    actor_name: actor.name,
     repository: repository() ?? undefined,
     branch: branch() ?? undefined,
     commit_sha: commitSha() ?? undefined,

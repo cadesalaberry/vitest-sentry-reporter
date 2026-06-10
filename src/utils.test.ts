@@ -20,6 +20,7 @@ import {
   cleanRecord,
   collectSuitePath,
   commitSha,
+  detectTrigger,
   extras,
   inferEnvironment,
   repository,
@@ -86,6 +87,9 @@ describe('utils', () => {
     vi.clearAllMocks();
     delete process.env.CI;
     delete process.env.NODE_ENV;
+    delete process.env.VITEST_SENTRY_TRIGGER;
+    delete process.env.VITEST_SENTRY_ACTOR_TYPE;
+    delete process.env.VITEST_SENTRY_ACTOR_NAME;
   });
 
   afterEach(() => {
@@ -204,6 +208,30 @@ describe('utils', () => {
     expect(inferEnvironment()).toBe('local');
   });
 
+  it('detectTrigger returns "ci" when a provider is detected', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue({ name: 'github' });
+    expect(detectTrigger({})).toBe('ci');
+  });
+
+  it('detectTrigger returns "ci" when only the CI env flag is set', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined);
+    expect(detectTrigger({ CI: 'true' })).toBe('ci');
+  });
+
+  it('detectTrigger returns "manual" outside CI', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined);
+    expect(detectTrigger({})).toBe('manual');
+  });
+
+  it('detectTrigger honors the manual VITEST_SENTRY_TRIGGER marker', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue({ name: 'github' });
+    expect(detectTrigger({ VITEST_SENTRY_TRIGGER: 'cron' })).toBe('cron');
+  });
+
   it('vitestVersion returns a semver-like string', () => {
     const v = vitestVersion();
     expect(typeof v === 'string' && v.length > 0).toBe(true);
@@ -240,6 +268,38 @@ describe('utils', () => {
         repository: 'acme/widgets',
         branch: 'main',
         commit_sha: 'abc123',
+      }),
+    );
+  });
+
+  it('baseTags classifies the trigger and the actor of the run', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined);
+
+    const ctx = { testName: 't' } as import('./types').FailureContext;
+    const tags = baseTags(ctx);
+    // Values depend on the environment the suite runs in (CI, agent, ...),
+    // so assert membership rather than exact values.
+    expect(['ci', 'manual']).toContain(tags.trigger);
+    expect(['ai', 'bot', 'human']).toContain(tags.actor_type);
+    expect(typeof tags.actor_name).toBe('string');
+    expect((tags.actor_name as string).length).toBeGreaterThan(0);
+  });
+
+  it('baseTags honors manually specified trigger and actor markers', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined);
+    process.env.VITEST_SENTRY_TRIGGER = 'cron';
+    process.env.VITEST_SENTRY_ACTOR_TYPE = 'bot';
+    process.env.VITEST_SENTRY_ACTOR_NAME = 'nightly-canary';
+
+    const ctx = { testName: 't' } as import('./types').FailureContext;
+    const tags = baseTags(ctx);
+    expect(tags).toEqual(
+      expect.objectContaining({
+        trigger: 'cron',
+        actor_type: 'bot',
+        actor_name: 'nightly-canary',
       }),
     );
   });

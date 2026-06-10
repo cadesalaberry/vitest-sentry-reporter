@@ -105,16 +105,59 @@ Compatible with Vitest 3 and 4.
 ### What gets reported
 
 - **Error**: The thrown error from the failed test (or synthesized from message).
-- **Tags**: `test_file`, `test_name`, `test_full_title`, `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `repository`, `branch`, `commit_sha`, plus any custom tags.
+- **Tags**: `test_file`, `test_name`, `test_full_title`, `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `repository`, `branch`, `commit_sha`, plus any custom tags.
 - **Extras**: `duration_ms`, `logs`, `suite_path`, `vitest_version`, minimal CI env snapshot.
 - **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky.
 - **Fingerprint**: Defaults to `['vitest-failure', file, testName]`; override with `getFingerprint`.
+
+### Trigger and actor detection (CI vs manual, human vs bot vs AI)
+
+Every failure is tagged with how the run was started and who (or what) started it:
+
+- **`trigger`**: `ci` when a CI provider is detected, `manual` otherwise.
+- **`actor_type`**: `human`, `bot`, or `ai`.
+- **`actor_name`**: the specific actor, e.g. `claude-code`, `cursor`, `github-copilot`, `openai-codex`, `dependabot`, `renovate` — or `human`.
+
+Out of the box the reporter recognizes:
+
+| Actor | `actor_type` | Markers |
+|---|---|---|
+| Claude Code | `ai` | `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT` |
+| Cursor | `ai` | `CURSOR_AGENT` |
+| GitHub Copilot coding agent | `ai` | `GITHUB_ACTOR=copilot-swe-agent[bot]` |
+| OpenAI Codex | `ai` | `CODEX_SANDBOX`, `CODEX_PROXY_CERT` |
+| Gemini CLI | `ai` | `GEMINI_CLI` |
+| opencode | `ai` | `OPENCODE`, `OPENCODE_BIN_PATH` |
+| Any agent advertising itself | `ai` | `AI_AGENT`, `AGENT` (reported as `actor_name`) |
+| Dependabot / Renovate | `bot` | `GITHUB_ACTOR`, `RENOVATE_VERSION` |
+| Any `*[bot]` / GitLab token login | `bot` | `GITHUB_ACTOR`, `GITLAB_USER_LOGIN` |
+| Everyone else | `human` | — |
+
+Detection lives in a single declarative registry
+([`src/actor-detectors/index.ts`](src/actor-detectors/index.ts)): supporting a
+new AI agent or bot is a one-entry addition, and PRs adding markers are
+welcome. The registry and helpers (`detectActor`, `detectTrigger`,
+`ACTOR_DETECTORS`) are exported if you want to reuse them in `getTags`.
+
+When auto-detection cannot know better, specify the markers manually — they
+always win over detection:
+
+```bash
+VITEST_SENTRY_TRIGGER=cron \
+VITEST_SENTRY_ACTOR_TYPE=bot \
+VITEST_SENTRY_ACTOR_NAME=nightly-canary \
+vitest run
+```
+
+The same three tags can also be pinned from the reporter options (`tags` or
+`getTags`); manually specified values take precedence over the detected ones.
 
 ### Environment variables and CI auto-detection
 
 - `SENTRY_DSN` (required unless `dsn` is provided)
 - `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` are respected when not explicitly set.
 - CI metadata auto-detected for GitHub Actions, CircleCI, Buildkite, GitLab, Jenkins.
+- `VITEST_SENTRY_TRIGGER`, `VITEST_SENTRY_ACTOR_TYPE`, `VITEST_SENTRY_ACTOR_NAME` manually pin the `trigger`/`actor_type`/`actor_name` tags.
 
 ### Multi-repo usage
 

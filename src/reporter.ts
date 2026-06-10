@@ -20,6 +20,7 @@ import {
   commitSha,
   extras,
   inferEnvironment,
+  MANUALLY_OVERRIDABLE_TAGS,
   toFailureContext,
 } from './utils.js';
 
@@ -109,11 +110,18 @@ export class VitestSentryReporter implements Reporter {
     if (!this.enabled) return;
     if (!this.initialized) this.initSentry();
 
-    const mergedTags = {
+    const manualTags = {
       ...cleanRecord(this.options.tags),
       ...cleanRecord(this.options.getTags?.(ctx)),
+    };
+    const mergedTags = {
+      ...manualTags,
       ...cleanRecord(baseTags(ctx)),
     } as Record<string, Primitive>;
+    // Detected trigger/actor markers yield to manually specified tags.
+    for (const key of MANUALLY_OVERRIDABLE_TAGS) {
+      if (key in manualTags) mergedTags[key] = manualTags[key];
+    }
 
     const fingerprint = this.options.getFingerprint?.(ctx) ?? [
       'vitest-failure',
