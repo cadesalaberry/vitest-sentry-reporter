@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.0.3...v1.1.0) (2026-06-10)
+
+
+### ✨ Features
+
+* **reporter:** ✨ tag failures with run trigger and actor detection ([#25](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/25)) ([addbc7f](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/addbc7fae560e94cdeea755f5c50ac9099764fc5))
+
 ## [1.0.3](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.0.2...v1.0.3) (2026-06-09)
 
 
