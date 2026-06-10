@@ -44,6 +44,41 @@ describe('makeDryRunTransport', () => {
     await expect(transport.send(badEnvelope as any)).resolves.toEqual({});
   });
 
+  it('falls back to a question mark when the event has no level', async () => {
+    const transport = makeDryRunTransport();
+    const envelope = createTestEnvelope('event', {
+      message: 'hello',
+      tags: { test_file: '/tests/example.test.ts' },
+    }) as unknown as any[];
+
+    await transport.send(envelope as any);
+
+    const calls = (console.warn as any).mock.calls;
+    expect(calls[0][1]).toContain('Event[❓]');
+  });
+
+  it('logs the raw item type for non-event envelopes', async () => {
+    const transport = makeDryRunTransport();
+    const envelope = createTestEnvelope('session', { sid: 'abc' }) as any[];
+
+    await transport.send(envelope as any);
+
+    const calls = (console.warn as any).mock.calls;
+    expect(calls.length).toBe(1);
+    expect(calls[0][1]).toContain('would send: session');
+  });
+
+  it('logs an empty description for envelopes without items', async () => {
+    const transport = makeDryRunTransport();
+    const envelope = [{ dsn: 'https://x@o0.ingest.sentry.io/0' }, []];
+
+    await expect(transport.send(envelope as any)).resolves.toEqual({});
+
+    const calls = (console.warn as any).mock.calls;
+    expect(calls.length).toBe(1);
+    expect(calls[0][1]).toBe('');
+  });
+
   it('flush returns true and logs', async () => {
     const transport = makeDryRunTransport();
     await expect(transport.flush(10)).resolves.toBe(true);
