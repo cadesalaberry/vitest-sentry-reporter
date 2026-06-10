@@ -154,6 +154,19 @@ describe('utils', () => {
     expect(ctx.meta).toBeDefined();
   });
 
+  it('toFailureContext rounds fractional durations to integer milliseconds', () => {
+    const testCase = makeTestCase({ duration: 123.456789 });
+    const ctx = toFailureContext(testCase);
+    expect(ctx.durationMs).toBe(123);
+    expect(Number.isInteger(ctx.durationMs)).toBe(true);
+  });
+
+  it('toFailureContext leaves durationMs undefined without a diagnostic', () => {
+    const testCase = makeTestCase();
+    (testCase as { diagnostic: () => unknown }).diagnostic = () => undefined;
+    expect(toFailureContext(testCase).durationMs).toBeUndefined();
+  });
+
   it('cleanRecord drops nullish values and stringifies objects', () => {
     const input = {
       a: 1,
