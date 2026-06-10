@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.1.0...v1.1.1) (2026-06-10)
+
+
+### 🐛 Bug Fixes
+
+* **reporter:** 🐛 round durationMs to an integer before reporting to Sentry ([#28](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/28)) ([42bbf84](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/42bbf84ed48e86d249d94c9e3845c029994e5aeb))
+
 ## [1.1.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.0.3...v1.1.0) (2026-06-10)
 
 
