@@ -68,7 +68,12 @@ export function toFailureContext(
     message: toErrorMessage(firstErr),
     stack: toStack(firstErr),
     error: firstErr,
-    durationMs: diagnostic?.duration,
+    // Vitest reports high-resolution fractional durations; Sentry expects
+    // whole milliseconds, so round to the nearest integer.
+    durationMs:
+      diagnostic?.duration == null
+        ? undefined
+        : Math.round(diagnostic.duration),
     retry: diagnostic?.retryCount,
     flaky: Boolean(diagnostic?.flaky),
     logs,

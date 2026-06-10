@@ -93,6 +93,7 @@ export type FailureContext = {
   message?: string;
   stack?: string;
   error?: unknown;
+  /** Test duration in whole milliseconds (rounded to the nearest integer). */
   durationMs?: number;
   retry?: number;
   flaky?: boolean;
