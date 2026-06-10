@@ -101,6 +101,7 @@ describe('utils', () => {
     expect(toErrorMessage('oops')).toBe('oops');
     expect(toErrorMessage(new Error('boom'))).toBe('boom');
     expect(toErrorMessage({ name: 'TypeError' })).toBe('TypeError');
+    expect(toErrorMessage({})).toBe('Error');
   });
 
   it('toStack extracts stack string', () => {
@@ -237,6 +238,20 @@ describe('utils', () => {
     expect(typeof v === 'string' && v.length > 0).toBe(true);
   });
 
+  it('vitestVersion returns undefined when the vitest package cannot be resolved', async () => {
+    vi.doMock('node:module', () => ({
+      createRequire: () => () => {
+        throw new Error('module not found');
+      },
+    }));
+    try {
+      const { vitestVersion: patchedVitestVersion } = await import('./utils');
+      expect(patchedVitestVersion()).toBeUndefined();
+    } finally {
+      vi.doUnmock('node:module');
+    }
+  });
+
   it('baseTags includes platform, CI and repo fields', async () => {
     const detect = await getDetectProviderMock();
     (detect as any).mockReturnValue({
@@ -331,5 +346,22 @@ describe('utils', () => {
         (ex as any).vitest_version === undefined,
     ).toBe(true);
     expect((ex as any).env).toEqual({ CI: 'true', GIT: '1' });
+  });
+
+  it('extras snapshots the bare CI flag when no provider is detected', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined);
+    process.env.CI = 'true';
+
+    const ctx = { testName: 't' } as import('./types').FailureContext;
+    expect((extras(ctx) as any).env).toEqual({ CI: 'true' });
+  });
+
+  it('extras returns an empty env snapshot outside CI', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined);
+
+    const ctx = { testName: 't' } as import('./types').FailureContext;
+    expect((extras(ctx) as any).env).toEqual({});
   });
 });
