@@ -10,6 +10,7 @@ const sentry = vi.hoisted(() => ({
     cb({
       setTags: vi.fn(),
       setExtras: vi.fn(),
+      setExtra: vi.fn(),
       setContext: vi.fn(),
       setFingerprint: vi.fn(),
       setUser: vi.fn(),
@@ -24,6 +25,12 @@ vi.mock('@sentry/node', () => sentry);
 vi.mock('./ci-providers/index.js', () => ({
   detectProvider: vi.fn(() => undefined),
 }));
+
+// Control CODEOWNERS resolution without touching the filesystem.
+const codeowners = vi.hoisted(() => ({
+  resolveCodeOwners: vi.fn((): string[] => []),
+}));
+vi.mock('./codeowners/index.js', () => codeowners);
 
 import { makeDryRunTransport } from './dry-run-transport.js';
 import VitestSentryReporter from './reporter.js';
@@ -60,6 +67,7 @@ function makeScope() {
   return {
     setTags: vi.fn(),
     setExtras: vi.fn(),
+    setExtra: vi.fn(),
     setContext: vi.fn(),
     setFingerprint: vi.fn(),
     setUser: vi.fn(),
@@ -85,6 +93,8 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     sentry.flush.mockClear();
     sentry.captureException.mockClear();
     sentry.withScope.mockClear();
+    codeowners.resolveCodeOwners.mockReset();
+    codeowners.resolveCodeOwners.mockReturnValue([]);
     delete process.env.SENTRY_DSN;
     delete process.env.SENTRY_ENVIRONMENT;
     delete process.env.SENTRY_RELEASE;
@@ -438,6 +448,78 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     } finally {
       log.mockRestore();
     }
+  });
+
+  it('does not resolve code owners unless the option is enabled', async () => {
+    const reporter = new VitestSentryReporter({ dsn: DSN });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    expect(codeowners.resolveCodeOwners).not.toHaveBeenCalled();
+  });
+
+  it('attaches code_owners and code_owner tags when enabled', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    codeowners.resolveCodeOwners.mockReturnValue(['@acme/api', '@alice']);
+    const reporter = new VitestSentryReporter({ dsn: DSN, codeowners: true });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    expect(scope.setTags.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        code_owners: '@acme/api,@alice',
+        code_owner: '@acme/api',
+      }),
+    );
+    expect(scope.setExtra).toHaveBeenCalledWith('code_owners', [
+      '@acme/api',
+      '@alice',
+    ]);
+  });
+
+  it('omits code owner tags when no owners match', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    codeowners.resolveCodeOwners.mockReturnValue([]);
+    const reporter = new VitestSentryReporter({ dsn: DSN, codeowners: true });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    const tags = scope.setTags.mock.calls[0][0] as Record<string, unknown>;
+    expect(tags).not.toHaveProperty('code_owners');
+    expect(tags).not.toHaveProperty('code_owner');
+    expect(scope.setExtra).not.toHaveBeenCalled();
+  });
+
+  it('lets manually specified tags override resolved code owners', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    codeowners.resolveCodeOwners.mockReturnValue(['@acme/api']);
+    const reporter = new VitestSentryReporter({
+      dsn: DSN,
+      codeowners: true,
+      getTags: () => ({ code_owner: '@platform', code_owners: '@platform' }),
+    });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    expect(scope.setTags.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        code_owner: '@platform',
+        code_owners: '@platform',
+      }),
+    );
   });
 
   it('keeps only the minimal default integrations', async () => {

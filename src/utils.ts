@@ -1,5 +1,7 @@
+import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
 import * as os from 'node:os';
+import * as path from 'node:path';
 import type { TestCase, TestModule, TestSuite } from 'vitest/node';
 import { detectActor } from './actor-detectors/index.js';
 import { detectProvider } from './ci-providers/index.js';
@@ -16,6 +18,8 @@ export const MANUALLY_OVERRIDABLE_TAGS = [
   'trigger',
   'actor_type',
   'actor_name',
+  'code_owners',
+  'code_owner',
 ] as const;
 
 export function toErrorMessage(err: unknown): string | undefined {
@@ -100,6 +104,23 @@ export function branch(): string | undefined {
 export function commitSha(): string | undefined {
   const p = detectProvider(process.env);
   return p?.commitSha(process.env);
+}
+
+/**
+ * Best-effort absolute path to the repository root, used to locate a
+ * CODEOWNERS file and relativize test paths. Prefers the active CI provider's
+ * checkout path (expanding a leading `~`), falling back to `process.cwd()`
+ * whenever the provider path is absent or does not exist on disk.
+ */
+export function repoRoot(): string | undefined {
+  const candidate = detectProvider(process.env)?.rootPath(process.env);
+  if (candidate) {
+    const expanded = candidate.startsWith('~')
+      ? path.join(os.homedir(), candidate.slice(1))
+      : candidate;
+    if (fs.existsSync(expanded)) return expanded;
+  }
+  return process.cwd();
 }
 
 export function inferEnvironment(): string | undefined {

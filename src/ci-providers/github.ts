@@ -11,6 +11,7 @@ export const GitHubActionsProvider: CIProvider = {
       ? `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`
       : undefined,
   workflowId: (env) => env.GITHUB_RUN_ID,
+  rootPath: (env) => env.GITHUB_WORKSPACE,
   envSnapshot: (env) => {
     const keys = [
       'CI',
@@ -20,6 +21,7 @@ export const GitHubActionsProvider: CIProvider = {
       'GITHUB_RUN_ID',
       'GITHUB_REF_NAME',
       'GITHUB_SHA',
+      'GITHUB_WORKSPACE',
     ];
     const out: Record<string, string | undefined> = {};
     for (const k of keys) out[k] = env[k];

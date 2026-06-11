@@ -8,8 +8,9 @@ export const JenkinsProvider: CIProvider = {
   commitSha: (_env) => undefined,
   runUrl: (env) => env.BUILD_URL,
   workflowId: (_env) => undefined,
+  rootPath: (env) => env.WORKSPACE,
   envSnapshot: (env) => {
-    const keys = ['CI', 'JENKINS_URL', 'BUILD_URL'];
+    const keys = ['CI', 'JENKINS_URL', 'BUILD_URL', 'WORKSPACE'];
     const out: Record<string, string | undefined> = {};
     for (const k of keys) out[k] = env[k];
     return out;

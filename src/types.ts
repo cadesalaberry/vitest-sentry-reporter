@@ -74,6 +74,17 @@ export type VitestSentryReporterOptions = {
     ctx: FailureContext,
   ) => Sentry.Event | null;
   /**
+   * Resolve repository CODEOWNERS for each failing test file and attach
+   * `code_owners` (all matching owners, comma-joined) and `code_owner` (the
+   * primary/first owner) Sentry tags, plus a `code_owners` array in extras.
+   *
+   * Disabled by default. Set `true` to enable with an auto-detected repository
+   * root (CI checkout path when available, otherwise `process.cwd()`), or pass
+   * an object to override the root used to locate the CODEOWNERS file and
+   * relativize test paths. Both tags can be overridden via `tags`/`getTags`.
+   */
+  codeowners?: boolean | { enabled?: boolean; root?: string };
+  /**
    * Upper bound on number of events sent in a single Vitest run. Useful to cap noise in very large suites.
    */
   maxEventsPerRun?: number;

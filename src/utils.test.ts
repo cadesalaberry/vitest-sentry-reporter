@@ -9,8 +9,12 @@ vi.mock('os', () => {
   return {
     platform: () => 'darwin',
     release: () => '24.0.0',
+    homedir: () => osState.home,
   };
 });
+
+// Mutable home directory for `os.homedir()`, overridable per test.
+const osState = vi.hoisted(() => ({ home: '/home/test' }));
 
 import type { TestCase } from 'vitest/node';
 import {
@@ -23,6 +27,7 @@ import {
   detectTrigger,
   extras,
   inferEnvironment,
+  repoRoot,
   repository,
   toErrorMessage,
   toFailureContext,
@@ -376,5 +381,32 @@ describe('utils', () => {
 
     const ctx = { testName: 't' } as import('./types').FailureContext;
     expect((extras(ctx) as any).env).toEqual({});
+  });
+
+  it('repoRoot returns the provider checkout path when it exists', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue({ rootPath: () => process.cwd() });
+    expect(repoRoot()).toBe(process.cwd());
+  });
+
+  it('repoRoot expands a leading ~ to the home directory', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue({ rootPath: () => '~' });
+    osState.home = process.cwd();
+    expect(repoRoot()).toBe(process.cwd());
+  });
+
+  it('repoRoot falls back to cwd when the provider path is missing on disk', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue({
+      rootPath: () => '/no/such/directory-xyz',
+    });
+    expect(repoRoot()).toBe(process.cwd());
+  });
+
+  it('repoRoot falls back to cwd when no provider is detected', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined);
+    expect(repoRoot()).toBe(process.cwd());
   });
 });
