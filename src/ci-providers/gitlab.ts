@@ -8,6 +8,7 @@ export const GitLabCIProvider: CIProvider = {
   commitSha: (env) => env.CI_COMMIT_SHA,
   runUrl: (_env) => undefined,
   workflowId: (_env) => undefined,
+  rootPath: (env) => env.CI_PROJECT_DIR,
   envSnapshot: (env) => {
     const keys = [
       'CI',
@@ -15,6 +16,7 @@ export const GitLabCIProvider: CIProvider = {
       'CI_PROJECT_PATH',
       'CI_COMMIT_BRANCH',
       'CI_COMMIT_SHA',
+      'CI_PROJECT_DIR',
     ];
     const out: Record<string, string | undefined> = {};
     for (const k of keys) out[k] = env[k];

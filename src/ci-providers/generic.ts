@@ -8,6 +8,7 @@ export const GenericCIProvider: CIProvider = {
   commitSha: (_env) => undefined,
   runUrl: (_env) => undefined,
   workflowId: (_env) => undefined,
+  rootPath: (_env) => undefined,
   envSnapshot: (env) => {
     const keys = ['CI'];
     const out: Record<string, string | undefined> = {};

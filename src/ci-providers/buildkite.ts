@@ -8,6 +8,7 @@ export const BuildkiteProvider: CIProvider = {
   commitSha: (env) => env.BUILDKITE_COMMIT,
   runUrl: (env) => env.BUILDKITE_BUILD_URL,
   workflowId: (env) => env.BUILDKITE_PIPELINE_ID,
+  rootPath: (env) => env.BUILDKITE_BUILD_CHECKOUT_PATH,
   envSnapshot: (env) => {
     const keys = [
       'CI',
@@ -16,6 +17,7 @@ export const BuildkiteProvider: CIProvider = {
       'BUILDKITE_BRANCH',
       'BUILDKITE_COMMIT',
       'BUILDKITE_PIPELINE_ID',
+      'BUILDKITE_BUILD_CHECKOUT_PATH',
     ];
     const out: Record<string, string | undefined> = {};
     for (const k of keys) out[k] = env[k];

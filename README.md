@@ -105,7 +105,7 @@ Compatible with Vitest 3 and 4.
 ### What gets reported
 
 - **Error**: The thrown error from the failed test (or synthesized from message).
-- **Tags**: `test_file`, `test_name`, `test_full_title`, `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `repository`, `branch`, `commit_sha`, plus any custom tags.
+- **Tags**: `test_file`, `test_name`, `test_full_title`, `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `repository`, `branch`, `commit_sha`, plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus any custom tags.
 - **Extras**: `duration_ms`, `logs`, `suite_path`, `vitest_version`, minimal CI env snapshot.
 - **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky.
 - **Fingerprint**: Defaults to `['vitest-failure', file, testName]`; override with `getFingerprint`.
@@ -151,6 +151,41 @@ vitest run
 
 The same three tags can also be pinned from the reporter options (`tags` or
 `getTags`); manually specified values take precedence over the detected ones.
+
+### Code ownership tags (CODEOWNERS)
+
+Route failures to the team that owns the failing file. When enabled, the
+reporter matches each failing test file against your repository's `CODEOWNERS`
+and attaches:
+
+- **`code_owners`**: every matching owner, comma-joined (e.g. `@acme/api,@alice`).
+- **`code_owner`**: the primary (first) owner, handy for single-owner alerts.
+
+The full owner list is also attached as a `code_owners` extra. The feature is
+**off by default**; enable it with the `codeowners` option:
+
+```ts
+new VitestSentryReporter({
+  // Auto-detect the repository root (CI checkout path, else process.cwd()):
+  codeowners: true,
+
+  // Or override the root used to locate CODEOWNERS and relativize test paths:
+  // codeowners: { root: '/path/to/repo' },
+});
+```
+
+The `CODEOWNERS` file is looked up at the standard locations — repository root,
+`.github/`, then `docs/` — and matched with gitignore-style precedence (last
+matching rule wins). In CI the repository root is taken from the detected
+provider's checkout path (`GITHUB_WORKSPACE`, `CI_PROJECT_DIR`,
+`BUILDKITE_BUILD_CHECKOUT_PATH`, Jenkins `WORKSPACE`, CircleCI working
+directory), falling back to `process.cwd()`. Both tags can be overridden via
+`tags`/`getTags`, which always take precedence over the resolved owners.
+
+Parsing depends only on [`ignore`](https://www.npmjs.com/package/ignore) (the
+zero-dependency gitignore matcher); see
+[`docs/decisions/0008-resolve-codeowners-into-sentry-tags.md`](docs/decisions/0008-resolve-codeowners-into-sentry-tags.md)
+for the rationale.
 
 ### Environment variables and CI auto-detection
 

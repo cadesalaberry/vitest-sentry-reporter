@@ -7,6 +7,7 @@ import type {
   TestModule,
   TestRunEndReason,
 } from 'vitest/node';
+import { resolveCodeOwners } from './codeowners/index.js';
 import { makeDryRunTransport } from './dry-run-transport.js';
 import type {
   FailureContext,
@@ -21,6 +22,7 @@ import {
   extras,
   inferEnvironment,
   MANUALLY_OVERRIDABLE_TAGS,
+  repoRoot,
   toFailureContext,
 } from './utils.js';
 
@@ -33,6 +35,8 @@ export class VitestSentryReporter implements Reporter {
   private queued: FailureContext[];
   private logsByTask: Map<string, string[]>;
   private maxEventsPerRun?: number;
+  private codeownersEnabled: boolean;
+  private codeownersRoot?: string;
 
   constructor(options: VitestSentryReporterOptions = {}) {
     this.name = 'vitest-sentry-reporter';
@@ -43,6 +47,16 @@ export class VitestSentryReporter implements Reporter {
     this.queued = [];
     this.logsByTask = new Map<string, string[]>();
     this.maxEventsPerRun = options.maxEventsPerRun;
+
+    const co = options.codeowners;
+    this.codeownersEnabled =
+      co === true ||
+      (typeof co === 'object' && co !== null && co.enabled !== false);
+    this.codeownersRoot = this.codeownersEnabled
+      ? typeof co === 'object' && co?.root
+        ? co.root
+        : repoRoot()
+      : undefined;
   }
 
   onInit(): void {
@@ -114,9 +128,15 @@ export class VitestSentryReporter implements Reporter {
       ...cleanRecord(this.options.tags),
       ...cleanRecord(this.options.getTags?.(ctx)),
     };
+    const owners = this.resolveOwners(ctx);
+    const codeOwnerTags: Record<string, Primitive> =
+      owners.length > 0
+        ? { code_owners: owners.join(','), code_owner: owners[0] }
+        : {};
     const mergedTags = {
       ...manualTags,
       ...cleanRecord(baseTags(ctx)),
+      ...cleanRecord(codeOwnerTags),
     } as Record<string, Primitive>;
     // Detected trigger/actor markers yield to manually specified tags.
     for (const key of MANUALLY_OVERRIDABLE_TAGS) {
@@ -163,6 +183,7 @@ export class VitestSentryReporter implements Reporter {
     withScope((scope) => {
       scope.setTags(mergedTags);
       scope.setExtras(extras(ctx));
+      if (owners.length > 0) scope.setExtra('code_owners', owners);
       scope.setContext('test', testContext);
       scope.setFingerprint(fingerprint);
 
@@ -244,6 +265,11 @@ export class VitestSentryReporter implements Reporter {
     if (typeof options.enabled === 'boolean') return options.enabled;
     if (options.dryRun) return true;
     return Boolean(options.dsn ?? process.env.SENTRY_DSN);
+  }
+
+  private resolveOwners(ctx: FailureContext): string[] {
+    if (!this.codeownersEnabled || !this.codeownersRoot) return [];
+    return resolveCodeOwners(ctx.filePath, this.codeownersRoot);
   }
 }
 
