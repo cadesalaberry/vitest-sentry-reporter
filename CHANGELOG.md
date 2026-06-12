@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.1.1...v1.2.0) (2026-06-11)
+
+
+### ✨ Features
+
+* **reporter:** ✨ resolve CODEOWNERS into code_owners/code_owner tags ([3367877](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/3367877e528d390e2250538f419a2163b52aca17))
+* **reporter:** resolve CODEOWNERS into code_owners/code_owner tags ([#30](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/30)) ([3367877](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/3367877e528d390e2250538f419a2163b52aca17))
+
 ## [1.1.1](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.1.0...v1.1.1) (2026-06-10)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "vitest-sentry-reporter",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Vitest reporter that sends failures and context to Sentry.",
   "type": "module",
   "main": "dist/index.js",
