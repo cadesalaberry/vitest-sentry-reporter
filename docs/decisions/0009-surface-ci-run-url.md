@@ -28,11 +28,12 @@ authors:
   panel and searchable, consistent with the other CI-derived tags. Like
   `repository`/`branch`/`commit_sha`, it is dropped when no provider is
   detected and is not user-overridable.
-- Add a dedicated, structured `ci` context (`provider`, `run_url`,
-  `workflow_id`) set via `scope.setContext('ci', …)`. Sentry auto-linkifies
-  URL values in the contexts panel, so `run_url` renders as a **clickable link**
-  straight to the failing build. The context is only attached when a CI
-  provider is detected (empty record ⇒ skipped).
+- Add a dedicated, structured `ci` context (`run_url`, `workflow_id`) set via
+  `scope.setContext('ci', …)`. Sentry auto-linkifies URL values in the contexts
+  panel, so `run_url` renders as a **clickable link** straight to the failing
+  build. The provider name is deliberately left out of the context — it is
+  already the `ci` tag — so the context is attached only when there is actually
+  a run URL/workflow id to link (empty record ⇒ skipped).
 
 ## Consequences
 

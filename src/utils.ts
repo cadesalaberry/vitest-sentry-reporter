@@ -205,14 +205,16 @@ export function baseTags(ctx: FailureContext): Record<string, Primitive> {
 }
 
 /**
- * Structured CI run context. Sentry renders URL values in the contexts panel
- * as clickable links, so the failing run (e.g. the CircleCI build) is one
- * click away from the Sentry issue. Returns an empty object when no CI
- * provider is detected, in which case the caller should skip setting it.
+ * Structured CI run context: the run URL (and workflow id) of the build that
+ * produced the failure. Sentry renders URL values in the contexts panel as
+ * clickable links, so the failing run (e.g. the CircleCI build) is one click
+ * away from the issue. The provider name is intentionally omitted here — it is
+ * already the `ci` tag. Returns an empty object when there is nothing to link
+ * (no CI provider, or a provider that exposes no run URL), in which case the
+ * caller should skip setting the context.
  */
 export function ciContext(): Record<string, Primitive> {
   return cleanRecord({
-    provider: ciProvider(),
     run_url: runUrl(),
     workflow_id: workflowId(),
   });

@@ -263,7 +263,6 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
 
     expect(scope.setContext).toHaveBeenCalledWith('ci', {
-      provider: 'circleci',
       run_url: 'https://circleci.com/build/1',
       workflow_id: 'wf-1',
     });

@@ -331,7 +331,7 @@ describe('utils', () => {
     expect(workflowId()).toBeUndefined();
   });
 
-  it('ciContext groups the provider, run url and workflow id', async () => {
+  it('ciContext carries the run url and workflow id of the build', async () => {
     const detect = await getDetectProviderMock();
     (detect as any).mockReturnValue({
       name: 'circleci',
@@ -340,16 +340,22 @@ describe('utils', () => {
     });
 
     expect(ciContext()).toEqual({
-      provider: 'circleci',
       run_url: 'https://circleci.com/build/1',
       workflow_id: 'wf-1',
     });
   });
 
-  it('ciContext drops absent fields and is empty outside CI', async () => {
+  it('ciContext drops absent fields and is empty without a run url', async () => {
     const detect = await getDetectProviderMock();
-    (detect as any).mockReturnValue(undefined);
+    // Provider detected, but it exposes no run URL or workflow id.
+    (detect as any).mockReturnValue({
+      name: 'generic',
+      runUrl: () => undefined,
+      workflowId: () => undefined,
+    });
+    expect(ciContext()).toEqual({});
 
+    (detect as any).mockReturnValue(undefined);
     expect(ciContext()).toEqual({});
   });
 
