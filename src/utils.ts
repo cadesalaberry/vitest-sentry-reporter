@@ -107,6 +107,21 @@ export function commitSha(): string | undefined {
 }
 
 /**
+ * URL of the CI run/build that produced the failure (e.g. the CircleCI build
+ * page, the GitHub Actions run). Undefined when no CI provider is detected or
+ * the provider does not expose one.
+ */
+export function runUrl(): string | undefined {
+  const p = detectProvider(process.env);
+  return p?.runUrl(process.env);
+}
+
+export function workflowId(): string | undefined {
+  const p = detectProvider(process.env);
+  return p?.workflowId(process.env);
+}
+
+/**
  * Best-effort absolute path to the repository root, used to locate a
  * CODEOWNERS file and relativize test paths. Prefers the active CI provider's
  * checkout path (expanding a leading `~`), falling back to `process.cwd()`
@@ -185,7 +200,24 @@ export function baseTags(ctx: FailureContext): Record<string, Primitive> {
     repository: repository() ?? undefined,
     branch: branch() ?? undefined,
     commit_sha: commitSha() ?? undefined,
+    run_url: runUrl() ?? undefined,
   };
+}
+
+/**
+ * Structured CI run context: the run URL (and workflow id) of the build that
+ * produced the failure. Sentry renders URL values in the contexts panel as
+ * clickable links, so the failing run (e.g. the CircleCI build) is one click
+ * away from the issue. The provider name is intentionally omitted here — it is
+ * already the `ci` tag. Returns an empty object when there is nothing to link
+ * (no CI provider, or a provider that exposes no run URL), in which case the
+ * caller should skip setting the context.
+ */
+export function ciContext(): Record<string, Primitive> {
+  return cleanRecord({
+    run_url: runUrl(),
+    workflow_id: workflowId(),
+  });
 }
 
 export function extras(ctx: FailureContext): Record<string, unknown> {

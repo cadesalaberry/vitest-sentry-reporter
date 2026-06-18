@@ -32,6 +32,7 @@ const codeowners = vi.hoisted(() => ({
 }));
 vi.mock('./codeowners/index.js', () => codeowners);
 
+import { detectProvider } from './ci-providers/index.js';
 import { makeDryRunTransport } from './dry-run-transport.js';
 import VitestSentryReporter from './reporter.js';
 
@@ -95,6 +96,8 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     sentry.withScope.mockClear();
     codeowners.resolveCodeOwners.mockReset();
     codeowners.resolveCodeOwners.mockReturnValue([]);
+    // Default to "no CI provider" so detection stays quiet unless a test opts in.
+    vi.mocked(detectProvider).mockReset();
     delete process.env.SENTRY_DSN;
     delete process.env.SENTRY_ENVIRONMENT;
     delete process.env.SENTRY_RELEASE;
@@ -236,6 +239,50 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
         actor_name: 'nightly-canary',
       }),
     );
+  });
+
+  it('attaches a clickable ci context and run_url tag from the active provider', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    vi.mocked(detectProvider).mockReturnValue({
+      name: 'circleci',
+      isActive: () => true,
+      repository: () => 'acme/widgets',
+      branch: () => 'main',
+      commitSha: () => 'abc123',
+      runUrl: () => 'https://circleci.com/build/1',
+      workflowId: () => 'wf-1',
+      rootPath: () => undefined,
+      envSnapshot: () => ({}),
+    });
+    const reporter = new VitestSentryReporter({ dsn: DSN });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    expect(scope.setContext).toHaveBeenCalledWith('ci', {
+      run_url: 'https://circleci.com/build/1',
+      workflow_id: 'wf-1',
+    });
+    expect(scope.setTags.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ run_url: 'https://circleci.com/build/1' }),
+    );
+  });
+
+  it('omits the ci context when no provider is detected', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    const reporter = new VitestSentryReporter({ dsn: DSN });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    expect(scope.setContext).not.toHaveBeenCalledWith('ci', expect.anything());
+    expect(scope.setTags.mock.calls[0][0]).not.toHaveProperty('run_url');
   });
 
   it('attaches buffered console logs to the failure context', async () => {
