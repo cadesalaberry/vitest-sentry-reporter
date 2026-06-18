@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.2.0...v1.3.0) (2026-06-18)
+
+
+### ✨ Features
+
+* **reporter:** ✨ surface the CI run URL on reported failures ([#33](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/33)) ([e7f2f13](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/e7f2f13d73efb005067b6faa1d9f872306630e93))
+
 ## [1.2.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.1.1...v1.2.0) (2026-06-11)
 
 
