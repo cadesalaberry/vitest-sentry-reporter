@@ -17,6 +17,7 @@ import type {
 } from './types.js';
 import {
   baseTags,
+  ciContext,
   cleanRecord,
   commitSha,
   extras,
@@ -185,6 +186,10 @@ export class VitestSentryReporter implements Reporter {
       scope.setExtras(extras(ctx));
       if (owners.length > 0) scope.setExtra('code_owners', owners);
       scope.setContext('test', testContext);
+      // Surface the failing CI run as a dedicated context so Sentry renders the
+      // run URL as a clickable link straight to the build (e.g. CircleCI).
+      const ci = ciContext();
+      if (Object.keys(ci).length > 0) scope.setContext('ci', ci);
       scope.setFingerprint(fingerprint);
 
       const user = this.options.getUser?.(ctx);

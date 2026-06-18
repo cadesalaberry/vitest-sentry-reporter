@@ -105,9 +105,9 @@ Compatible with Vitest 3 and 4.
 ### What gets reported
 
 - **Error**: The thrown error from the failed test (or synthesized from message).
-- **Tags**: `test_file`, `test_name`, `test_full_title`, `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `repository`, `branch`, `commit_sha`, plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus any custom tags.
+- **Tags**: `test_file`, `test_name`, `test_full_title`, `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `repository`, `branch`, `commit_sha`, `run_url` (link to the CI run/build, when detected), plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus any custom tags.
 - **Extras**: `duration_ms`, `logs`, `suite_path`, `vitest_version`, minimal CI env snapshot.
-- **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky.
+- **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky, and — when a CI provider is detected — a `ci` context with `provider`, `run_url`, and `workflow_id`. Sentry renders the `run_url` as a clickable link, so the failing CI run (e.g. the CircleCI build) is one click from the issue.
 - **Fingerprint**: Defaults to `['vitest-failure', file, testName]`; override with `getFingerprint`.
 
 ### Trigger and actor detection (CI vs manual, human vs bot vs AI)
