@@ -11,6 +11,9 @@ describe('GenericCIProvider', () => {
     expect(GenericCIProvider.commitSha(env)).toBeUndefined();
     expect(GenericCIProvider.runUrl(env)).toBeUndefined();
     expect(GenericCIProvider.workflowId(env)).toBeUndefined();
+    expect(GenericCIProvider.pullRequestUrl(env)).toBeUndefined();
+    expect(GenericCIProvider.jobName(env)).toBeUndefined();
+    expect(GenericCIProvider.commitUrl(env)).toBeUndefined();
     expect(GenericCIProvider.rootPath(env)).toBeUndefined();
   });
 

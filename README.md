@@ -68,10 +68,12 @@ export default defineConfig({
           retry: String(ctx.retry ?? 0),
         }),
 
-        // Stable grouping across repos
+        // Stable grouping across repos (this is also the default).
+        // `relativeFilePath` is the repo-root-relative path, so a failure
+        // groups the same way whether it ran locally or in CI.
         getFingerprint: (ctx) => [
           'vitest-failure',
-          ctx.filePath ?? 'unknown-file',
+          ctx.relativeFilePath ?? ctx.filePath ?? 'unknown-file',
           ctx.testName,
         ],
 
@@ -105,10 +107,23 @@ Compatible with Vitest 3 and 4.
 ### What gets reported
 
 - **Error**: The thrown error from the failed test (or synthesized from message).
-- **Tags**: `test_file`, `test_name`, `test_full_title`, `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `repository`, `branch`, `commit_sha`, plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus any custom tags.
+- **Tags**: `test_file` (repo-relative path, see below), `test_name`, `test_full_title`, `test_project` (Vitest project/workspace name, handy for monorepos), `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `job_name` (CI job/step/shard name), `repository`, `branch`, `commit_sha`, plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus any custom tags.
 - **Extras**: `duration_ms`, `logs`, `suite_path`, `vitest_version`, minimal CI env snapshot.
-- **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky.
-- **Fingerprint**: Defaults to `['vitest-failure', file, testName]`; override with `getFingerprint`.
+- **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky; in CI, a `ci` context with direct triage links — `pull_request_url`, `run_url`, `commit_url`, and `workflow_id` — for whichever the detected provider exposes.
+- **Fingerprint**: Defaults to `['vitest-failure', repoRelativeFile, testName]`; override with `getFingerprint`.
+
+#### Repo-relative `test_file` and grouping
+
+The `test_file` tag and the default fingerprint use the test file's path
+**relative to the repository root** (with `/` separators), rather than the
+absolute path Vitest reports. Absolute paths differ between a local checkout
+(e.g. `/Users/you/repo/src/x.test.ts`) and CI
+(e.g. `/home/runner/work/repo/repo/src/x.test.ts`), which would otherwise split
+the same failure into separate Sentry issues. Relativizing them means a failure
+groups identically across local and CI runs. The repository root is the detected
+CI checkout path (falling back to `process.cwd()`), and the absolute path is
+still available on the `test` context and as `ctx.filePath`. Provide
+`getFingerprint` to fully control grouping.
 
 ### Trigger and actor detection (CI vs manual, human vs bot vs AI)
 

@@ -17,6 +17,7 @@ import type {
 } from './types.js';
 import {
   baseTags,
+  ciContext,
   cleanRecord,
   commitSha,
   extras,
@@ -145,7 +146,8 @@ export class VitestSentryReporter implements Reporter {
 
     const fingerprint = this.options.getFingerprint?.(ctx) ?? [
       'vitest-failure',
-      ctx.filePath ?? 'unknown-file',
+      // Repo-relative so the same failure groups across local and CI checkouts.
+      ctx.relativeFilePath ?? ctx.filePath ?? 'unknown-file',
       ctx.testName,
     ];
 
@@ -185,6 +187,8 @@ export class VitestSentryReporter implements Reporter {
       scope.setExtras(extras(ctx));
       if (owners.length > 0) scope.setExtra('code_owners', owners);
       scope.setContext('test', testContext);
+      const ci = ciContext();
+      if (Object.keys(ci).length > 0) scope.setContext('ci', ci);
       scope.setFingerprint(fingerprint);
 
       const user = this.options.getUser?.(ctx);

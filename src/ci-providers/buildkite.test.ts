@@ -10,6 +10,8 @@ describe('BuildkiteProvider', () => {
     BUILDKITE_COMMIT: 'abc123',
     BUILDKITE_PIPELINE_ID: 'pipe-1',
     BUILDKITE_BUILD_CHECKOUT_PATH: '/buildkite/builds/agent/acme/widgets',
+    BUILDKITE_LABEL: ':jest: unit tests',
+    BUILDKITE_PULL_REQUEST: '5',
   };
 
   it('extracts run metadata from BUILDKITE_* variables', () => {
@@ -25,6 +27,12 @@ describe('BuildkiteProvider', () => {
     expect(BuildkiteProvider.rootPath(env)).toBe(
       '/buildkite/builds/agent/acme/widgets',
     );
+  });
+
+  it('uses the step label as the job name and exposes no PR/commit URLs', () => {
+    expect(BuildkiteProvider.jobName(env)).toBe(':jest: unit tests');
+    expect(BuildkiteProvider.pullRequestUrl(env)).toBeUndefined();
+    expect(BuildkiteProvider.commitUrl(env)).toBeUndefined();
   });
 
   it('snapshots only its own environment keys', () => {

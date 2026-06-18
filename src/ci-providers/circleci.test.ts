@@ -11,6 +11,8 @@ describe('CircleCIProvider', () => {
     CIRCLE_SHA1: 'abc123',
     CIRCLE_PROJECT_REPONAME: 'widgets',
     CIRCLE_WORKING_DIRECTORY: '~/project',
+    CIRCLE_JOB: 'build-and-test',
+    CIRCLE_PULL_REQUEST: 'https://github.com/acme/widgets/pull/3',
   };
 
   it('extracts run metadata from CIRCLE_* variables', () => {
@@ -24,6 +26,14 @@ describe('CircleCIProvider', () => {
 
   it('exposes the working directory as the checkout root path', () => {
     expect(CircleCIProvider.rootPath(env)).toBe('~/project');
+  });
+
+  it('exposes the job name and pull request URL, but no commit URL', () => {
+    expect(CircleCIProvider.jobName(env)).toBe('build-and-test');
+    expect(CircleCIProvider.pullRequestUrl(env)).toBe(
+      'https://github.com/acme/widgets/pull/3',
+    );
+    expect(CircleCIProvider.commitUrl(env)).toBeUndefined();
   });
 
   it('snapshots only its own environment keys', () => {

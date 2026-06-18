@@ -26,6 +26,12 @@ vi.mock('./ci-providers/index.js', () => ({
   detectProvider: vi.fn(() => undefined),
 }));
 
+import { detectProvider } from './ci-providers/index.js';
+
+const detectProviderMock = detectProvider as unknown as ReturnType<
+  typeof vi.fn
+>;
+
 // Control CODEOWNERS resolution without touching the filesystem.
 const codeowners = vi.hoisted(() => ({
   resolveCodeOwners: vi.fn((): string[] => []),
@@ -95,6 +101,8 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     sentry.withScope.mockClear();
     codeowners.resolveCodeOwners.mockReset();
     codeowners.resolveCodeOwners.mockReturnValue([]);
+    detectProviderMock.mockReset();
+    detectProviderMock.mockReturnValue(undefined);
     delete process.env.SENTRY_DSN;
     delete process.env.SENTRY_ENVIRONMENT;
     delete process.env.SENTRY_RELEASE;
@@ -236,6 +244,68 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
         actor_name: 'nightly-canary',
       }),
     );
+  });
+
+  it('tags the failure with the Vitest project name', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    const reporter = new VitestSentryReporter({ dsn: DSN });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    expect(scope.setTags.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ test_project: 'unit' }),
+    );
+  });
+
+  it('attaches a ci context with provider links and skips it locally', async () => {
+    // Local run: no provider detected, so no ci context is attached.
+    const localScope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(localScope),
+    );
+    const localReporter = new VitestSentryReporter({ dsn: DSN });
+    await localReporter.onTestRunEnd(
+      [makeModule([makeTestCase({ id: 't1' })])],
+      [],
+      'failed',
+    );
+    expect(localScope.setContext).not.toHaveBeenCalledWith(
+      'ci',
+      expect.anything(),
+    );
+
+    // CI run: the detected provider's links are attached as a `ci` context.
+    const ciScope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(ciScope),
+    );
+    detectProviderMock.mockReturnValue({
+      name: 'github',
+      repository: () => 'acme/widgets',
+      branch: () => 'main',
+      commitSha: () => 'abc123',
+      rootPath: () => undefined,
+      runUrl: () => 'https://gh/run/1',
+      pullRequestUrl: () => 'https://gh/pull/2',
+      commitUrl: () => 'https://gh/commit/abc123',
+      workflowId: () => '1',
+    });
+    const ciReporter = new VitestSentryReporter({ dsn: DSN });
+    await ciReporter.onTestRunEnd(
+      [makeModule([makeTestCase({ id: 't2' })])],
+      [],
+      'failed',
+    );
+    expect(ciScope.setContext).toHaveBeenCalledWith('ci', {
+      run_url: 'https://gh/run/1',
+      pull_request_url: 'https://gh/pull/2',
+      commit_url: 'https://gh/commit/abc123',
+      workflow_id: '1',
+    });
   });
 
   it('attaches buffered console logs to the failure context', async () => {

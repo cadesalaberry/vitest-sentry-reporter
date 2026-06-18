@@ -98,6 +98,13 @@ export type VitestSentryReporterOptions = {
 export type FailureContext = {
   id?: string;
   filePath?: string;
+  /**
+   * {@link filePath} made relative to the repository root (POSIX separators), so
+   * the same failure groups identically across local and CI checkouts whose
+   * absolute paths differ. Falls back to the absolute path when it cannot be
+   * relativized. Used for the `test_file` tag and the default fingerprint.
+   */
+  relativeFilePath?: string;
   testName: string;
   fullTitle?: string;
   suitePath?: string[];

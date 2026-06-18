@@ -62,10 +62,12 @@ export function toFailureContext(
   const diagnostic = testCase.diagnostic();
   const firstErr = result.errors?.[0];
   const suitePath = collectSuitePath(testCase);
+  const filePath = testCase.module.moduleId;
 
   return {
     id: testCase.id,
-    filePath: testCase.module.moduleId,
+    filePath,
+    relativeFilePath: relativeTestFile(filePath),
     testName: testCase.name,
     fullTitle: testCase.fullName,
     suitePath,
@@ -123,6 +125,50 @@ export function repoRoot(): string | undefined {
   return process.cwd();
 }
 
+/**
+ * Convert an absolute test file path to a repository-root-relative POSIX path,
+ * so the same failure groups identically across local and CI checkouts (whose
+ * absolute paths differ). Returns the original path when there is no root or
+ * the file lives outside it.
+ */
+export function relativeTestFile(
+  filePath: string | undefined,
+  root: string | undefined = repoRoot(),
+): string | undefined {
+  if (!filePath || !root) return filePath;
+  const rel = path.relative(root, filePath);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return filePath;
+  // Normalize to POSIX separators so fingerprints match across platforms.
+  return rel.split(path.sep).join('/');
+}
+
+/**
+ * Name of the current CI job, step or shard (e.g. GitHub job id, GitLab/CircleCI
+ * job name, Buildkite step label), or `undefined` outside a recognized CI.
+ */
+export function jobName(): string | undefined {
+  return detectProvider(process.env)?.jobName?.(process.env);
+}
+
+/**
+ * Direct, clickable CI links for the current run — pull/merge request, the run
+ * itself, and the commit under test — for triage. Only defined links are
+ * included; returns an empty object outside a recognized CI provider.
+ */
+export function ciContext(): Record<string, string> {
+  const p = detectProvider(process.env);
+  if (!p) return {};
+  const links: Record<string, string | undefined> = {
+    pull_request_url: p.pullRequestUrl?.(process.env),
+    run_url: p.runUrl?.(process.env),
+    commit_url: p.commitUrl?.(process.env),
+    workflow_id: p.workflowId?.(process.env),
+  };
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(links)) if (v) out[k] = v;
+  return out;
+}
+
 export function inferEnvironment(): string | undefined {
   if (ciProvider()) return 'ci';
   return process.env.NODE_ENV || 'local';
@@ -168,11 +214,17 @@ export function cleanRecord(
 
 export function baseTags(ctx: FailureContext): Record<string, Primitive> {
   const actor = detectActor(process.env);
+  const projectName =
+    typeof ctx.meta?.projectName === 'string'
+      ? ctx.meta.projectName
+      : undefined;
   return {
     reporter: 'vitest-sentry-reporter',
-    test_file: ctx.filePath ?? 'unknown',
+    test_file: ctx.relativeFilePath ?? ctx.filePath ?? 'unknown',
     test_name: ctx.testName,
     test_full_title: ctx.fullTitle ?? ctx.testName,
+    // Vitest project/workspace name; useful for triage in monorepos.
+    test_project: projectName || undefined,
     flaky: String(Boolean(ctx.flaky)),
     retry: ctx.retry ?? 0,
     node_version: process.version,
@@ -182,6 +234,7 @@ export function baseTags(ctx: FailureContext): Record<string, Primitive> {
     trigger: detectTrigger(process.env),
     actor_type: actor.type,
     actor_name: actor.name,
+    job_name: jobName() ?? undefined,
     repository: repository() ?? undefined,
     branch: branch() ?? undefined,
     commit_sha: commitSha() ?? undefined,
