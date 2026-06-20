@@ -109,6 +109,21 @@ export function commitSha(): string | undefined {
 }
 
 /**
+ * URL of the CI run/build that produced the failure (e.g. the CircleCI build
+ * page, the GitHub Actions run). Undefined when no CI provider is detected or
+ * the provider does not expose one.
+ */
+export function runUrl(): string | undefined {
+  const p = detectProvider(process.env);
+  return p?.runUrl(process.env);
+}
+
+export function workflowId(): string | undefined {
+  const p = detectProvider(process.env);
+  return p?.workflowId(process.env);
+}
+
+/**
  * Best-effort absolute path to the repository root, used to locate a
  * CODEOWNERS file and relativize test paths. Prefers the active CI provider's
  * checkout path (expanding a leading `~`), falling back to `process.cwd()`
@@ -151,22 +166,19 @@ export function jobName(): string | undefined {
 }
 
 /**
- * Direct, clickable CI links for the current run — pull/merge request, the run
- * itself, and the commit under test — for triage. Only defined links are
- * included; returns an empty object outside a recognized CI provider.
+ * URL of the pull/merge request the run belongs to, or `undefined` when the run
+ * was not triggered by one (or no CI provider is detected).
  */
-export function ciContext(): Record<string, string> {
-  const p = detectProvider(process.env);
-  if (!p) return {};
-  const links: Record<string, string | undefined> = {
-    pull_request_url: p.pullRequestUrl?.(process.env),
-    run_url: p.runUrl?.(process.env),
-    commit_url: p.commitUrl?.(process.env),
-    workflow_id: p.workflowId?.(process.env),
-  };
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(links)) if (v) out[k] = v;
-  return out;
+export function pullRequestUrl(): string | undefined {
+  return detectProvider(process.env)?.pullRequestUrl?.(process.env);
+}
+
+/**
+ * Direct URL to the commit under test on the hosting provider, or `undefined`
+ * when it cannot be derived from the CI environment.
+ */
+export function commitUrl(): string | undefined {
+  return detectProvider(process.env)?.commitUrl?.(process.env);
 }
 
 export function inferEnvironment(): string | undefined {
@@ -238,7 +250,26 @@ export function baseTags(ctx: FailureContext): Record<string, Primitive> {
     repository: repository() ?? undefined,
     branch: branch() ?? undefined,
     commit_sha: commitSha() ?? undefined,
+    run_url: runUrl() ?? undefined,
   };
+}
+
+/**
+ * Structured CI run context for triage: direct links to the pull/merge request,
+ * the run/build that produced the failure, and the commit under test, plus the
+ * workflow/run id. Sentry renders URL values in the contexts panel as clickable
+ * links, so the failing run, PR and commit are one click from the issue. The
+ * provider name is intentionally omitted here — it is already the `ci` tag.
+ * Returns an empty object when nothing is available (no CI provider, or one that
+ * exposes none of these), in which case the caller should skip the context.
+ */
+export function ciContext(): Record<string, Primitive> {
+  return cleanRecord({
+    pull_request_url: pullRequestUrl(),
+    run_url: runUrl(),
+    commit_url: commitUrl(),
+    workflow_id: workflowId(),
+  });
 }
 
 export function extras(ctx: FailureContext): Record<string, unknown> {

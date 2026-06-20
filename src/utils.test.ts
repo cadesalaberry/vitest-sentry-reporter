@@ -33,10 +33,12 @@ import {
   relativeTestFile,
   repoRoot,
   repository,
+  runUrl,
   toErrorMessage,
   toFailureContext,
   toStack,
   vitestVersion,
+  workflowId,
 } from './utils';
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -313,6 +315,8 @@ describe('utils', () => {
       repository: () => 'acme/widgets',
       branch: () => 'main',
       commitSha: () => 'abc123',
+      runUrl: () => 'https://ci.example/run/1',
+      workflowId: () => 'wf-1',
     });
 
     const ctx = {
@@ -337,8 +341,57 @@ describe('utils', () => {
         repository: 'acme/widgets',
         branch: 'main',
         commit_sha: 'abc123',
+        run_url: 'https://ci.example/run/1',
       }),
     );
+  });
+
+  it('runUrl and workflowId come from the active provider', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue({
+      name: 'circleci',
+      runUrl: () => 'https://circleci.com/build/1',
+      workflowId: () => 'wf-1',
+    });
+
+    expect(runUrl()).toBe('https://circleci.com/build/1');
+    expect(workflowId()).toBe('wf-1');
+  });
+
+  it('runUrl and workflowId are undefined without a provider', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined);
+
+    expect(runUrl()).toBeUndefined();
+    expect(workflowId()).toBeUndefined();
+  });
+
+  it('ciContext carries the run url and workflow id of the build', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue({
+      name: 'circleci',
+      runUrl: () => 'https://circleci.com/build/1',
+      workflowId: () => 'wf-1',
+    });
+
+    expect(ciContext()).toEqual({
+      run_url: 'https://circleci.com/build/1',
+      workflow_id: 'wf-1',
+    });
+  });
+
+  it('ciContext drops absent fields and is empty without a run url', async () => {
+    const detect = await getDetectProviderMock();
+    // Provider detected, but it exposes no run URL or workflow id.
+    (detect as any).mockReturnValue({
+      name: 'generic',
+      runUrl: () => undefined,
+      workflowId: () => undefined,
+    });
+    expect(ciContext()).toEqual({});
+
+    (detect as any).mockReturnValue(undefined);
+    expect(ciContext()).toEqual({});
   });
 
   it('baseTags classifies the trigger and the actor of the run', async () => {
@@ -380,6 +433,7 @@ describe('utils', () => {
       repository: () => undefined,
       branch: () => undefined,
       commitSha: () => undefined,
+      runUrl: () => undefined,
       jobName: () => 'unit-shard-2',
     });
 

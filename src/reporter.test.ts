@@ -101,6 +101,7 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     sentry.withScope.mockClear();
     codeowners.resolveCodeOwners.mockReset();
     codeowners.resolveCodeOwners.mockReturnValue([]);
+    // Default to "no CI provider" so detection stays quiet unless a test opts in.
     detectProviderMock.mockReset();
     detectProviderMock.mockReturnValue(undefined);
     delete process.env.SENTRY_DSN;
@@ -261,7 +262,38 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     );
   });
 
-  it('attaches a ci context with provider links and skips it locally', async () => {
+  it('attaches a clickable ci context and run_url tag from the active provider', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    detectProviderMock.mockReturnValue({
+      name: 'circleci',
+      isActive: () => true,
+      repository: () => 'acme/widgets',
+      branch: () => 'main',
+      commitSha: () => 'abc123',
+      runUrl: () => 'https://circleci.com/build/1',
+      workflowId: () => 'wf-1',
+      rootPath: () => undefined,
+      envSnapshot: () => ({}),
+    });
+    const reporter = new VitestSentryReporter({ dsn: DSN });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    // The circleci mock exposes no PR/commit URL, so only run_url/workflow_id appear.
+    expect(scope.setContext).toHaveBeenCalledWith('ci', {
+      run_url: 'https://circleci.com/build/1',
+      workflow_id: 'wf-1',
+    });
+    expect(scope.setTags.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ run_url: 'https://circleci.com/build/1' }),
+    );
+  });
+
+  it('attaches a ci context with all provider links and skips it locally', async () => {
     // Local run: no provider detected, so no ci context is attached.
     const localScope = makeScope();
     sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
@@ -306,6 +338,20 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
       commit_url: 'https://gh/commit/abc123',
       workflow_id: '1',
     });
+  });
+
+  it('omits the ci context when no provider is detected', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    const reporter = new VitestSentryReporter({ dsn: DSN });
+    const failed = makeTestCase({ id: 't1' });
+
+    await reporter.onTestRunEnd([makeModule([failed])], [], 'failed');
+
+    expect(scope.setContext).not.toHaveBeenCalledWith('ci', expect.anything());
+    expect(scope.setTags.mock.calls[0][0]).not.toHaveProperty('run_url');
   });
 
   it('attaches buffered console logs to the failure context', async () => {

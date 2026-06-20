@@ -187,6 +187,8 @@ export class VitestSentryReporter implements Reporter {
       scope.setExtras(extras(ctx));
       if (owners.length > 0) scope.setExtra('code_owners', owners);
       scope.setContext('test', testContext);
+      // Surface CI triage links as a dedicated context so Sentry renders them
+      // as clickable links straight to the run, pull request and commit.
       const ci = ciContext();
       if (Object.keys(ci).length > 0) scope.setContext('ci', ci);
       scope.setFingerprint(fingerprint);

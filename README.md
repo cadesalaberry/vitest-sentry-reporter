@@ -107,9 +107,9 @@ Compatible with Vitest 3 and 4.
 ### What gets reported
 
 - **Error**: The thrown error from the failed test (or synthesized from message).
-- **Tags**: `test_file` (repo-relative path, see below), `test_name`, `test_full_title`, `test_project` (Vitest project/workspace name, handy for monorepos), `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `job_name` (CI job/step/shard name), `repository`, `branch`, `commit_sha`, plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus any custom tags.
+- **Tags**: `test_file` (repo-relative path, see below), `test_name`, `test_full_title`, `test_project` (Vitest project/workspace name, handy for monorepos), `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `job_name` (CI job/step/shard name), `repository`, `branch`, `commit_sha`, `run_url` (link to the CI run/build, when detected), plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus any custom tags.
 - **Extras**: `duration_ms`, `logs`, `suite_path`, `vitest_version`, minimal CI env snapshot.
-- **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky; in CI, a `ci` context with direct triage links — `pull_request_url`, `run_url`, `commit_url`, and `workflow_id` — for whichever the detected provider exposes.
+- **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky; in CI, a `ci` context with direct triage links — `pull_request_url`, `run_url`, `commit_url`, and `workflow_id` — for whichever the detected provider exposes. Sentry renders these URLs as clickable links, so the failing run, pull request and commit are one click from the issue.
 - **Fingerprint**: Defaults to `['vitest-failure', repoRelativeFile, testName]`; override with `getFingerprint`.
 
 #### Repo-relative `test_file` and grouping
