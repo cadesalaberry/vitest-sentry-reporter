@@ -38,7 +38,7 @@ authors:
 - **Extend the `CIProvider` interface** with `pullRequestUrl`, `jobName`, and
   `commitUrl`, implemented per provider from documented environment variables
   (e.g. GitHub `GITHUB_REF`/`GITHUB_JOB`/`GITHUB_SHA`, GitLab
-  `CI_MERGE_REQUEST_IID`/`CI_JOB_NAME`/`CI_PROJECT_URL`, CircleCI
+  `CI_MERGE_REQUEST_IID`/`CI_JOB_NAME`/`CI_PROJECT_URL`/`CI_COMMIT_SHA`, CircleCI
   `CIRCLE_PULL_REQUEST`/`CIRCLE_JOB`, Buildkite `BUILDKITE_LABEL`, Jenkins
   `CHANGE_URL`/`JOB_NAME`). Where a provider has no portable variable for a
   link, the method returns `undefined` rather than guessing.
