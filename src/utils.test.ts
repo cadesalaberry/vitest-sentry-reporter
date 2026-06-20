@@ -16,6 +16,7 @@ vi.mock('os', () => {
 // Mutable home directory for `os.homedir()`, overridable per test.
 const osState = vi.hoisted(() => ({ home: '/home/test' }));
 
+import * as path from 'node:path';
 import type { TestCase } from 'vitest/node';
 import {
   baseTags,
@@ -28,6 +29,8 @@ import {
   detectTrigger,
   extras,
   inferEnvironment,
+  jobName,
+  relativeTestFile,
   repoRoot,
   repository,
   runUrl,
@@ -173,6 +176,45 @@ describe('utils', () => {
     const testCase = makeTestCase();
     (testCase as { diagnostic: () => unknown }).diagnostic = () => undefined;
     expect(toFailureContext(testCase).durationMs).toBeUndefined();
+  });
+
+  it('toFailureContext records the repo-relative file path and project name', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined); // repoRoot falls back to cwd
+    const testCase = makeTestCase({
+      moduleId: path.join(process.cwd(), 'src', 'feature.test.ts'),
+      projectName: 'web',
+    });
+    const ctx = toFailureContext(testCase);
+    expect(ctx.relativeFilePath).toBe('src/feature.test.ts');
+    expect(ctx.meta?.projectName).toBe('web');
+  });
+
+  it('relativeTestFile relativizes against the root with POSIX separators', () => {
+    const root = path.join('/repo', 'root');
+    expect(relativeTestFile(path.join(root, 'src', 'a.test.ts'), root)).toBe(
+      'src/a.test.ts',
+    );
+  });
+
+  it('relativeTestFile returns the original path when outside the root', () => {
+    expect(relativeTestFile('/other/place/a.test.ts', '/repo/root')).toBe(
+      '/other/place/a.test.ts',
+    );
+  });
+
+  it('relativeTestFile keeps in-root directories whose names start with dots', () => {
+    const root = path.join('/repo', 'root');
+    expect(
+      relativeTestFile(path.join(root, '..vitest', 'a.test.ts'), root),
+    ).toBe('..vitest/a.test.ts');
+  });
+
+  it('relativeTestFile passes through when path or root is missing', () => {
+    expect(relativeTestFile(undefined, '/repo')).toBeUndefined();
+    expect(relativeTestFile('/repo/a.test.ts', undefined)).toBe(
+      '/repo/a.test.ts',
+    );
   });
 
   it('cleanRecord drops nullish values and stringifies objects', () => {
@@ -389,6 +431,74 @@ describe('utils', () => {
         actor_name: 'nightly-canary',
       }),
     );
+  });
+
+  it('baseTags surfaces the Vitest project and CI job name', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue({
+      name: 'github',
+      repository: () => undefined,
+      branch: () => undefined,
+      commitSha: () => undefined,
+      runUrl: () => undefined,
+      jobName: () => 'unit-shard-2',
+    });
+
+    const ctx = {
+      testName: 't',
+      meta: { projectName: 'web' },
+    } as import('./types').FailureContext;
+    const tags = baseTags(ctx);
+    expect(tags).toEqual(
+      expect.objectContaining({
+        test_project: 'web',
+        job_name: 'unit-shard-2',
+      }),
+    );
+  });
+
+  it('baseTags prefers the relative file path and drops an empty project name', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined);
+    const ctx = {
+      testName: 't',
+      filePath: '/abs/src/a.test.ts',
+      relativeFilePath: 'src/a.test.ts',
+      meta: { projectName: '' },
+    } as import('./types').FailureContext;
+    const tags = baseTags(ctx);
+    expect(tags.test_file).toBe('src/a.test.ts');
+    expect(tags.test_project).toBeUndefined();
+  });
+
+  it('jobName comes from the active provider, undefined otherwise', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue({ jobName: () => 'build-and-test' });
+    expect(jobName()).toBe('build-and-test');
+
+    (detect as any).mockReturnValue(undefined);
+    expect(jobName()).toBeUndefined();
+  });
+
+  it('ciContext collects only the defined links from the provider', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue({
+      pullRequestUrl: () => 'https://gh/pull/1',
+      runUrl: () => 'https://gh/run/2',
+      commitUrl: () => undefined,
+      workflowId: () => '2',
+    });
+    expect(ciContext()).toEqual({
+      pull_request_url: 'https://gh/pull/1',
+      run_url: 'https://gh/run/2',
+      workflow_id: '2',
+    });
+  });
+
+  it('ciContext is empty when no CI provider is detected', async () => {
+    const detect = await getDetectProviderMock();
+    (detect as any).mockReturnValue(undefined);
+    expect(ciContext()).toEqual({});
   });
 
   it('extras returns duration/logs/suite path, vitest version and env snapshot', async () => {

@@ -146,7 +146,8 @@ export class VitestSentryReporter implements Reporter {
 
     const fingerprint = this.options.getFingerprint?.(ctx) ?? [
       'vitest-failure',
-      ctx.filePath ?? 'unknown-file',
+      // Repo-relative so the same failure groups across local and CI checkouts.
+      ctx.relativeFilePath ?? ctx.filePath ?? 'unknown-file',
       ctx.testName,
     ];
 
@@ -186,8 +187,8 @@ export class VitestSentryReporter implements Reporter {
       scope.setExtras(extras(ctx));
       if (owners.length > 0) scope.setExtra('code_owners', owners);
       scope.setContext('test', testContext);
-      // Surface the failing CI run as a dedicated context so Sentry renders the
-      // run URL as a clickable link straight to the build (e.g. CircleCI).
+      // Surface CI triage links as a dedicated context so Sentry renders them
+      // as clickable links straight to the run, pull request and commit.
       const ci = ciContext();
       if (Object.keys(ci).length > 0) scope.setContext('ci', ci);
       scope.setFingerprint(fingerprint);

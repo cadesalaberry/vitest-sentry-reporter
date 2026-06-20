@@ -62,10 +62,12 @@ export function toFailureContext(
   const diagnostic = testCase.diagnostic();
   const firstErr = result.errors?.[0];
   const suitePath = collectSuitePath(testCase);
+  const filePath = testCase.module.moduleId;
 
   return {
     id: testCase.id,
-    filePath: testCase.module.moduleId,
+    filePath,
+    relativeFilePath: relativeTestFile(filePath),
     testName: testCase.name,
     fullTitle: testCase.fullName,
     suitePath,
@@ -138,6 +140,55 @@ export function repoRoot(): string | undefined {
   return process.cwd();
 }
 
+/**
+ * Convert an absolute test file path to a repository-root-relative POSIX path,
+ * so the same failure groups identically across local and CI checkouts (whose
+ * absolute paths differ). Returns the original path when there is no root or
+ * the file lives outside it.
+ */
+export function relativeTestFile(
+  filePath: string | undefined,
+  root: string | undefined = repoRoot(),
+): string | undefined {
+  if (!filePath || !root) return filePath;
+  const rel = path.relative(root, filePath);
+  // Treat only genuine parent traversal (`..` or `../…`) as outside the root —
+  // not in-root directories whose names merely start with dots (e.g. `..foo/`).
+  if (
+    !rel ||
+    rel === '..' ||
+    rel.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(rel)
+  )
+    return filePath;
+  // Normalize to POSIX separators so fingerprints match across platforms.
+  return rel.split(path.sep).join('/');
+}
+
+/**
+ * Name of the current CI job, step or shard (e.g. GitHub job id, GitLab/CircleCI
+ * job name, Buildkite step label), or `undefined` outside a recognized CI.
+ */
+export function jobName(): string | undefined {
+  return detectProvider(process.env)?.jobName?.(process.env);
+}
+
+/**
+ * URL of the pull/merge request the run belongs to, or `undefined` when the run
+ * was not triggered by one (or no CI provider is detected).
+ */
+export function pullRequestUrl(): string | undefined {
+  return detectProvider(process.env)?.pullRequestUrl?.(process.env);
+}
+
+/**
+ * Direct URL to the commit under test on the hosting provider, or `undefined`
+ * when it cannot be derived from the CI environment.
+ */
+export function commitUrl(): string | undefined {
+  return detectProvider(process.env)?.commitUrl?.(process.env);
+}
+
 export function inferEnvironment(): string | undefined {
   if (ciProvider()) return 'ci';
   return process.env.NODE_ENV || 'local';
@@ -183,11 +234,17 @@ export function cleanRecord(
 
 export function baseTags(ctx: FailureContext): Record<string, Primitive> {
   const actor = detectActor(process.env);
+  const projectName =
+    typeof ctx.meta?.projectName === 'string'
+      ? ctx.meta.projectName
+      : undefined;
   return {
     reporter: 'vitest-sentry-reporter',
-    test_file: ctx.filePath ?? 'unknown',
+    test_file: ctx.relativeFilePath ?? ctx.filePath ?? 'unknown',
     test_name: ctx.testName,
     test_full_title: ctx.fullTitle ?? ctx.testName,
+    // Vitest project/workspace name; useful for triage in monorepos.
+    test_project: projectName || undefined,
     flaky: String(Boolean(ctx.flaky)),
     retry: ctx.retry ?? 0,
     node_version: process.version,
@@ -197,6 +254,8 @@ export function baseTags(ctx: FailureContext): Record<string, Primitive> {
     trigger: detectTrigger(process.env),
     actor_type: actor.type,
     actor_name: actor.name,
+    // `|| undefined` (not `??`) so a blank job name is dropped, like test_project.
+    job_name: jobName() || undefined,
     repository: repository() ?? undefined,
     branch: branch() ?? undefined,
     commit_sha: commitSha() ?? undefined,
@@ -205,17 +264,19 @@ export function baseTags(ctx: FailureContext): Record<string, Primitive> {
 }
 
 /**
- * Structured CI run context: the run URL (and workflow id) of the build that
- * produced the failure. Sentry renders URL values in the contexts panel as
- * clickable links, so the failing run (e.g. the CircleCI build) is one click
- * away from the issue. The provider name is intentionally omitted here — it is
- * already the `ci` tag. Returns an empty object when there is nothing to link
- * (no CI provider, or a provider that exposes no run URL), in which case the
- * caller should skip setting the context.
+ * Structured CI run context for triage: direct links to the pull/merge request,
+ * the run/build that produced the failure, and the commit under test, plus the
+ * workflow/run id. Sentry renders URL values in the contexts panel as clickable
+ * links, so the failing run, PR and commit are one click from the issue. The
+ * provider name is intentionally omitted here — it is already the `ci` tag.
+ * Returns an empty object when nothing is available (no CI provider, or one that
+ * exposes none of these), in which case the caller should skip the context.
  */
 export function ciContext(): Record<string, Primitive> {
   return cleanRecord({
+    pull_request_url: pullRequestUrl(),
     run_url: runUrl(),
+    commit_url: commitUrl(),
     workflow_id: workflowId(),
   });
 }

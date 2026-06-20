@@ -20,6 +20,7 @@ This directory contains Architectural Decision Records using MADR (Markdown Arch
 | [0007](0007-adopt-biome-for-lint-and-format.md) | Adopt Biome for linting and formatting | accepted | 2026-06-09 |
 | [0008](0008-resolve-codeowners-into-sentry-tags.md) | Resolve CODEOWNERS into Sentry tags | accepted | 2026-06-11 |
 | [0009](0009-surface-ci-run-url.md) | Surface the CI run URL on reported failures | accepted | 2026-06-18 |
+| [0010](0010-relativize-test-file-and-surface-ci-links.md) | Relativize test_file for grouping and surface CI links and project name | accepted | 2026-06-18 |
 
 ADRs are numbered sequentially in the chronological order in which they were decided.
 
