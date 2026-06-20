@@ -152,7 +152,15 @@ export function relativeTestFile(
 ): string | undefined {
   if (!filePath || !root) return filePath;
   const rel = path.relative(root, filePath);
-  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return filePath;
+  // Treat only genuine parent traversal (`..` or `../…`) as outside the root —
+  // not in-root directories whose names merely start with dots (e.g. `..foo/`).
+  if (
+    !rel ||
+    rel === '..' ||
+    rel.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(rel)
+  )
+    return filePath;
   // Normalize to POSIX separators so fingerprints match across platforms.
   return rel.split(path.sep).join('/');
 }
@@ -246,7 +254,8 @@ export function baseTags(ctx: FailureContext): Record<string, Primitive> {
     trigger: detectTrigger(process.env),
     actor_type: actor.type,
     actor_name: actor.name,
-    job_name: jobName() ?? undefined,
+    // `|| undefined` (not `??`) so a blank job name is dropped, like test_project.
+    job_name: jobName() || undefined,
     repository: repository() ?? undefined,
     branch: branch() ?? undefined,
     commit_sha: commitSha() ?? undefined,

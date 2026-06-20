@@ -203,6 +203,13 @@ describe('utils', () => {
     );
   });
 
+  it('relativeTestFile keeps in-root directories whose names start with dots', () => {
+    const root = path.join('/repo', 'root');
+    expect(
+      relativeTestFile(path.join(root, '..vitest', 'a.test.ts'), root),
+    ).toBe('..vitest/a.test.ts');
+  });
+
   it('relativeTestFile passes through when path or root is missing', () => {
     expect(relativeTestFile(undefined, '/repo')).toBeUndefined();
     expect(relativeTestFile('/repo/a.test.ts', undefined)).toBe(
