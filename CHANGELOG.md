@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.3.0...v1.4.0) (2026-06-20)
+
+
+### ✨ Features
+
+* **reporter:** ✨ relativize test_file and surface CI links and project ([#35](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/35)) ([673f27b](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/673f27bd274914e51f802da8675542386d2b2d3c))
+
 ## [1.3.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.2.0...v1.3.0) (2026-06-18)
 
 
