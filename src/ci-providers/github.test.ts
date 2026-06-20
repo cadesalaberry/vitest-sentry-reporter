@@ -47,6 +47,11 @@ describe('GitHubActionsProvider', () => {
     );
   });
 
+  it('has no commit URL when the commit SHA is missing', () => {
+    const { GITHUB_SHA: _omitted, ...partial } = env;
+    expect(GitHubActionsProvider.commitUrl(partial)).toBeUndefined();
+  });
+
   it('derives the pull request URL from refs/pull/<n>/merge', () => {
     expect(GitHubActionsProvider.pullRequestUrl(env)).toBe(
       'https://github.com/acme/widgets/pull/42',

@@ -46,6 +46,11 @@ describe('GitLabCIProvider', () => {
     expect(GitLabCIProvider.pullRequestUrl(partial)).toBeUndefined();
   });
 
+  it('has no commit URL when the commit SHA is missing', () => {
+    const { CI_COMMIT_SHA: _omitted, ...partial } = env;
+    expect(GitLabCIProvider.commitUrl(partial)).toBeUndefined();
+  });
+
   it('snapshots only its own environment keys', () => {
     expect(GitLabCIProvider.envSnapshot({ ...env, SECRET: 'x' })).toEqual(env);
   });
