@@ -55,12 +55,17 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: cadesalaberry/vitest-sentry-reporter
+          # Derive the slug from the current repo so forks upload to their own
+          # Codecov project without editing this workflow.
+          slug: ${{ github.repository }}
           files: ./coverage/lcov.info
           # Install the uploader from PyPI to avoid the binary's GPG
           # signature self-check, which is unreliable on the runners.
           use_pypi: true
-          fail_ci_if_error: true
+          # Only hard-fail on upload errors when a CODECOV_TOKEN is configured
+          # (the upstream repo and any fork that sets one). A fork without the
+          # token gets a tokenless best-effort upload that never fails CI.
+          fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
 
   quality:
     runs-on: ubuntu-latest

@@ -26,15 +26,38 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # Publishes to npm only when release-please cut a new release.
+  # Publishes the package when release-please cut a new release.
   #
-  # Auth is npm Trusted Publishing (OIDC) — there is no NPM_TOKEN secret. npm
-  # exchanges the GitHub OIDC token (id-token: write) for a short-lived, scoped
-  # publish credential and attaches build provenance automatically. This
-  # requires a Trusted Publisher to be configured for the package on npmjs.com
-  # (repo + this workflow file); see docs/decisions/0006-*.md.
-  publish-npm:
-    name: Publish to npm
+  # Two auth paths, selected automatically by whether an NPM_TOKEN secret is
+  # present, so this workflow is reusable by forks without editing it:
+  #
+  #   1. No NPM_TOKEN (the upstream default): npm Trusted Publishing (OIDC).
+  #      npm exchanges the GitHub OIDC token (id-token: write) for a
+  #      short-lived, scoped credential and attaches build provenance. Requires
+  #      a Trusted Publisher configured for the package on npmjs.com (repo +
+  #      this workflow file). See docs/decisions/0006-*.md and 0011-*.md.
+  #
+  #   2. NPM_TOKEN set (forks / private registries): token auth. Publishes to
+  #      the registry in the NPM_REGISTRY_URL variable (defaults to npm), so a
+  #      fork can publish to its own npm account or a private Azure Artifacts
+  #      feed by injecting the secret + variables below. See docs/decisions/
+  #      0011-*.md.
+  #
+  # Fork configuration (Settings -> Secrets and variables -> Actions):
+  #   secret   NPM_TOKEN           npm automation token, or an Azure Artifacts
+  #                                Personal Access Token used as the registry
+  #                                _authToken.
+  #   variable NPM_REGISTRY_URL    Target registry. Defaults to
+  #                                https://registry.npmjs.org. For a private
+  #                                Azure Artifacts feed use, e.g.:
+  #                                https://pkgs.dev.azure.com/ORG/PROJECT/_packaging/FEED/npm/registry/
+  #   variable NPM_PUBLISH_ACCESS  'public' (default) or 'restricted' (use
+  #                                'restricted' for a private Azure feed).
+  #   variable NPM_PROVENANCE      'true' to attach provenance on token-based
+  #                                npmjs.org publishes; ignored for other
+  #                                registries (provenance is npm-only).
+  publish:
+    name: Publish package
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
@@ -60,11 +83,68 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '20'
+          # OIDC trusted publishing only targets the public npm registry; the
+          # token path below writes its own .npmrc for NPM_REGISTRY_URL.
           registry-url: 'https://registry.npmjs.org'
 
       # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 20 ships npm 10.x.
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@latest
 
-      - name: Publish to npm
-        run: npm publish --provenance --access public
+      - name: Publish
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_REGISTRY_URL: ${{ vars.NPM_REGISTRY_URL }}
+          NPM_PUBLISH_ACCESS: ${{ vars.NPM_PUBLISH_ACCESS }}
+          NPM_PROVENANCE: ${{ vars.NPM_PROVENANCE }}
+          UPSTREAM_REPO: cadesalaberry/vitest-sentry-reporter
+        run: |
+          set -euo pipefail
+          access="${NPM_PUBLISH_ACCESS:-public}"
+
+          # A fork that has not injected an NPM_TOKEN cannot publish anywhere it
+          # controls: the OIDC path only works for the upstream Trusted
+          # Publisher. Skip cleanly instead of failing the release so forks that
+          # merge a release PR without configuring publishing stay green.
+          if [ -z "${NPM_TOKEN:-}" ] && [ "${GITHUB_REPOSITORY}" != "${UPSTREAM_REPO}" ]; then
+            echo "No NPM_TOKEN configured and this is not the upstream repo — skipping publish."
+            echo "To publish from a fork, set an NPM_TOKEN secret (and, for a private"
+            echo "registry, the NPM_REGISTRY_URL / NPM_PUBLISH_ACCESS variables)."
+            exit 0
+          fi
+
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            # Upstream default: npm Trusted Publishing (OIDC) to the public
+            # registry, with provenance. No long-lived token is involved.
+            echo "Publishing to npm via Trusted Publishing (OIDC)."
+            npm publish --provenance --access "${access}"
+            exit 0
+          fi
+
+          # Token auth: publish to NPM_REGISTRY_URL (defaults to npmjs.org).
+          # Works for a fork's own npm account or a private Azure Artifacts feed.
+          registry="${NPM_REGISTRY_URL:-https://registry.npmjs.org}"
+          case "${registry}" in */) ;; *) registry="${registry}/" ;; esac
+          # Derive the //host/path/ key npm uses for the per-registry _authToken.
+          registry_key="//${registry#*://}"
+
+          # A project-local .npmrc takes precedence over setup-node's config.
+          # The token is referenced (not written) so it is never on disk in the
+          # clear; npm expands ${NODE_AUTH_TOKEN} at publish time.
+          {
+            echo "registry=${registry}"
+            echo "${registry_key}:_authToken=\${NODE_AUTH_TOKEN}"
+            echo "always-auth=true"
+          } > .npmrc
+
+          # Provenance requires the public npm registry; opt in with NPM_PROVENANCE.
+          provenance=()
+          if [ "${registry}" = "https://registry.npmjs.org/" ] && [ "${NPM_PROVENANCE:-}" = "true" ]; then
+            provenance=(--provenance)
+          fi
+
+          echo "Publishing to ${registry} with a token (access=${access})."
+          NODE_AUTH_TOKEN="${NPM_TOKEN}" npm publish \
+            --registry "${registry}" \
+            --access "${access}" \
+            "${provenance[@]}"

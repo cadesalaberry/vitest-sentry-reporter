@@ -276,3 +276,49 @@ version is tracked in `.release-please-manifest.json`. See
   Settings → Actions → General → Workflow permissions, so release-please can
   open its release PR.
 
+### Reusing this workflow in a fork
+
+The CI and release workflows are fork-safe: nothing is hardcoded to the
+upstream repository in a way that would leak or misfire. Codecov uploads use
+the current repo's slug and never hard-fail a fork that has no `CODECOV_TOKEN`,
+and the release job only publishes when *you* configure it — a fork that merges
+a release PR without any publishing secret is skipped cleanly (it stays green
+instead of failing an OIDC publish it can't perform).
+
+To publish from your fork, add the following under **Settings → Secrets and
+variables → Actions**. The release job auto-selects token auth as soon as an
+`NPM_TOKEN` secret is present.
+
+| Kind | Name | Purpose |
+|---|---|---|
+| Secret | `NPM_TOKEN` | npm automation token, **or** an Azure Artifacts Personal Access Token used as the registry `_authToken`. |
+| Variable | `NPM_REGISTRY_URL` | Target registry. Defaults to `https://registry.npmjs.org`. |
+| Variable | `NPM_PUBLISH_ACCESS` | `public` (default) or `restricted`. Use `restricted` for a private feed. |
+| Variable | `NPM_PROVENANCE` | `true` to attach [provenance](https://docs.npmjs.com/generating-provenance-statements) on token-based npmjs.org publishes. Ignored for other registries (provenance is npm-only). |
+
+#### Publish to your own npm account
+
+Set the `NPM_TOKEN` secret to an npm automation token. Leave the variables at
+their defaults (or set `NPM_PROVENANCE=true`). Update `name`, `repository`, and
+`homepage` in `package.json` to your fork before shipping so you don't clash
+with the upstream package name.
+
+#### Publish to a private Azure Artifacts feed
+
+Point the workflow at your feed's npm registry endpoint:
+
+- `NPM_REGISTRY_URL` =
+  `https://pkgs.dev.azure.com/<ORG>/<PROJECT>/_packaging/<FEED>/npm/registry/`
+  (project-scoped) or
+  `https://pkgs.dev.azure.com/<ORG>/_packaging/<FEED>/npm/registry/`
+  (organization-scoped).
+- `NPM_PUBLISH_ACCESS` = `restricted`.
+- `NPM_TOKEN` = an Azure DevOps **Personal Access Token** with *Packaging:
+  Read & write* scope. The workflow writes a project `.npmrc` that uses it as
+  the registry `_authToken` with `always-auth=true`, then runs
+  `npm publish --registry <your feed>`.
+
+Rename the package to your feed's scope (e.g. `@your-org/vitest-sentry-reporter`)
+in `package.json`; scoped names are what Azure Artifacts expects. No Trusted
+Publisher and no npm OIDC are involved on this path.
+
