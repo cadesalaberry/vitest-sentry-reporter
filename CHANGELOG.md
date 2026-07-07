@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.4.0...v1.4.1) (2026-07-07)
+
+
+### 👷 Continuous Integration
+
+* 👷 make CI and release workflows reusable by forks ([#39](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/39)) ([7c264d3](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/7c264d30ea45233e2a67304b1f4c8ae505d89d7b))
+* bump actions/checkout from 6 to 7 ([#37](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/37)) ([edd518c](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/edd518c8203bb800a7dee46bec4ed8598d8b2015))
+
 ## [1.4.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.3.0...v1.4.0) (2026-06-20)
 
 
