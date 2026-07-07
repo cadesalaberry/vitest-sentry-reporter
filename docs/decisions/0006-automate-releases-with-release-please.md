@@ -97,4 +97,7 @@ drift fail loudly on the offending PR instead of silently reaching a release tag
 - npm provenance: https://docs.npmjs.com/generating-provenance-statements
 - npm trusted publishing (OIDC): https://docs.npmjs.com/trusted-publishers
 - ADR-0001: Adopt Bun as the package manager and runtime
+- ADR-0011: Make the release workflow reusable by forks (token / Azure Artifacts
+  publishing) — supplements this decision so forks can publish with a token or
+  to a private registry.
 - `docs/COMMIT_CONVENTION.md`

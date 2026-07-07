@@ -267,12 +267,18 @@ version is tracked in `.release-please-manifest.json`. See
 
 ### One-time repository setup
 
-- Configure **npm Trusted Publishing** for the package: on npmjs.com open the
-  package → Settings → Trusted Publishers and add a GitHub Actions publisher for
-  repo `cadesalaberry/vitest-sentry-reporter` and workflow `release.yml`.
-  Publishing then uses short-lived OIDC credentials, so there is no `NPM_TOKEN`
-  secret to store or rotate and it is not blocked by account 2FA.
-- Enable **Allow GitHub Actions to create and approve pull requests** under
-  Settings → Actions → General → Workflow permissions, so release-please can
-  open its release PR.
+The one-time configuration of this repository (npm Trusted Publishing on
+npmjs.com, workflow permissions for release-please) is documented in
+[docs/setup/upstream-repository-setup.md](docs/setup/upstream-repository-setup.md).
+
+### Reusing this workflow in a fork
+
+The CI and release workflows are fork-safe and reusable without editing any
+workflow file: forks get working CI out of the box, and can publish to their
+own npm account or a private Azure Artifacts feed by injecting a secret and a
+few variables. See
+[docs/setup/reusing-in-a-fork.md](docs/setup/reusing-in-a-fork.md) for the
+configuration reference, and
+[docs/setup/publishing-to-azure-artifacts.md](docs/setup/publishing-to-azure-artifacts.md)
+for the step-by-step Azure Artifacts walkthrough.
 

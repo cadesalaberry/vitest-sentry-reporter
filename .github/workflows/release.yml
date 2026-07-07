@@ -26,15 +26,54 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # Publishes to npm only when release-please cut a new release.
+  # Publishes the package when release-please cut a new release.
   #
-  # Auth is npm Trusted Publishing (OIDC) — there is no NPM_TOKEN secret. npm
-  # exchanges the GitHub OIDC token (id-token: write) for a short-lived, scoped
-  # publish credential and attaches build provenance automatically. This
-  # requires a Trusted Publisher to be configured for the package on npmjs.com
-  # (repo + this workflow file); see docs/decisions/0006-*.md.
-  publish-npm:
-    name: Publish to npm
+  # Two auth paths, selected automatically by whether an NPM_TOKEN secret is
+  # present, so this workflow is reusable by forks without editing it:
+  #
+  #   1. No NPM_TOKEN (the upstream default): npm Trusted Publishing (OIDC).
+  #      npm exchanges the GitHub OIDC token (id-token: write) for a
+  #      short-lived, scoped credential and attaches build provenance. Requires
+  #      a Trusted Publisher configured for the package on npmjs.com (repo +
+  #      this workflow file). See docs/decisions/0006-*.md and 0011-*.md.
+  #
+  #   2. NPM_TOKEN set (forks / private registries): token auth. Publishes to
+  #      the registry in the NPM_REGISTRY_URL variable (defaults to npm), so a
+  #      fork can publish to its own npm account or a private Azure Artifacts
+  #      feed by injecting the secret + variables below. See docs/decisions/
+  #      0011-*.md.
+  #
+  # The token path auto-selects the auth format from the registry host:
+  #   - Azure Artifacts feeds (pkgs.dev.azure.com / *.pkgs.visualstudio.com):
+  #     a base64-encoded PAT in :_password, for both the /npm/registry/ and the
+  #     /npm/ feed-root paths, with always-auth=true — the form the Azure docs
+  #     require for a PAT (:_authToken is only for in-pipeline OAuth tokens).
+  #   - Any other npm-compatible registry: a bearer :_authToken.
+  # Override the auto-detection with the NPM_AUTH_STYLE variable if needed.
+  #
+  # Fork configuration (Settings -> Secrets and variables -> Actions) — full
+  # guides live in docs/setup/reusing-in-a-fork.md and, for Azure Artifacts,
+  # docs/setup/publishing-to-azure-artifacts.md:
+  #   secret   NPM_TOKEN           npm automation token, or (for Azure
+  #                                Artifacts) a Personal Access Token with the
+  #                                Packaging: Read & write scope. Pass the raw
+  #                                PAT; it is base64-encoded here as Azure needs.
+  #   variable NPM_REGISTRY_URL    Target registry. Defaults to
+  #                                https://registry.npmjs.org. For a private
+  #                                Azure Artifacts feed use, e.g.:
+  #                                https://pkgs.dev.azure.com/ORG/PROJECT/_packaging/FEED/npm/registry/
+  #                                (org-scoped feeds omit the /PROJECT segment).
+  #   variable NPM_PUBLISH_ACCESS  'public' (default) or 'restricted' (use
+  #                                'restricted' for a private Azure feed).
+  #   variable NPM_AUTH_STYLE      'password' (Azure base64 PAT) or 'token'
+  #                                (bearer _authToken). Auto-detected from the
+  #                                registry host when unset; set it for a
+  #                                self-hosted Azure DevOps Server URL.
+  #   variable NPM_PROVENANCE      'true' to attach provenance on token-based
+  #                                npmjs.org publishes; ignored for other
+  #                                registries (provenance is npm-only).
+  publish:
+    name: Publish package
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
@@ -60,11 +99,100 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '20'
+          # OIDC trusted publishing only targets the public npm registry; the
+          # token path below writes its own .npmrc for NPM_REGISTRY_URL.
           registry-url: 'https://registry.npmjs.org'
 
       # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 20 ships npm 10.x.
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@latest
 
-      - name: Publish to npm
-        run: npm publish --provenance --access public
+      - name: Publish
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_REGISTRY_URL: ${{ vars.NPM_REGISTRY_URL }}
+          NPM_PUBLISH_ACCESS: ${{ vars.NPM_PUBLISH_ACCESS }}
+          NPM_AUTH_STYLE: ${{ vars.NPM_AUTH_STYLE }}
+          NPM_PROVENANCE: ${{ vars.NPM_PROVENANCE }}
+          UPSTREAM_REPO: cadesalaberry/vitest-sentry-reporter
+        run: |
+          set -euo pipefail
+          access="${NPM_PUBLISH_ACCESS:-public}"
+
+          # A fork that has not injected an NPM_TOKEN cannot publish anywhere it
+          # controls: the OIDC path only works for the upstream Trusted
+          # Publisher. Skip cleanly instead of failing the release so forks that
+          # merge a release PR without configuring publishing stay green.
+          if [ -z "${NPM_TOKEN:-}" ] && [ "${GITHUB_REPOSITORY}" != "${UPSTREAM_REPO}" ]; then
+            echo "No NPM_TOKEN configured and this is not the upstream repo — skipping publish."
+            echo "To publish from a fork, set an NPM_TOKEN secret (and, for a private"
+            echo "registry, the NPM_REGISTRY_URL / NPM_PUBLISH_ACCESS variables)."
+            exit 0
+          fi
+
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            # Upstream default: npm Trusted Publishing (OIDC) to the public
+            # registry, with provenance. No long-lived token is involved.
+            echo "Publishing to npm via Trusted Publishing (OIDC)."
+            npm publish --provenance --access "${access}"
+            exit 0
+          fi
+
+          # Token auth: publish to NPM_REGISTRY_URL (defaults to npmjs.org). The
+          # project-local .npmrc takes precedence over setup-node's config.
+          registry="${NPM_REGISTRY_URL:-https://registry.npmjs.org}"
+          case "${registry}" in */) ;; *) registry="${registry}/" ;; esac
+          host_path="${registry#*://}"   # host/path/ (scheme stripped)
+
+          # Choose the auth format. Azure Artifacts requires a base64-encoded PAT
+          # in :_password; every other npm-compatible registry takes a bearer
+          # :_authToken. Auto-detect from the host, override with NPM_AUTH_STYLE.
+          style="${NPM_AUTH_STYLE:-}"
+          if [ -z "${style}" ]; then
+            case "${host_path}" in
+              pkgs.dev.azure.com/*|*.pkgs.visualstudio.com/*) style=password ;;
+              *) style=token ;;
+            esac
+          fi
+
+          provenance=()
+          if [ "${style}" = "password" ]; then
+            # Azure Artifacts: the PAT must be base64-encoded in :_password, with
+            # credentials for both the /npm/registry/ path (restore) and the
+            # /npm/ feed root (publish). See docs/decisions/0011-*.md for the
+            # Azure references. The encoded PAT is referenced via
+            # ${AZURE_NPM_PASSWORD} so it is never written to .npmrc in the clear,
+            # and the derived value is masked in the logs.
+            AZURE_NPM_PASSWORD="$(printf '%s' "${NPM_TOKEN}" | base64 -w0)"
+            echo "::add-mask::${AZURE_NPM_PASSWORD}"
+            export AZURE_NPM_PASSWORD
+            keys=("//${host_path}")
+            root_key="//${host_path%registry/}"
+            if [ "${root_key}" != "//${host_path}" ]; then keys+=("${root_key}"); fi
+            {
+              echo "registry=${registry}"
+              echo "always-auth=true"
+              for key in "${keys[@]}"; do
+                echo "${key}:username=vsts-npm-token"
+                echo "${key}:_password=\${AZURE_NPM_PASSWORD}"
+                echo "${key}:email=npm-requires-email@example.invalid"
+              done
+            } > .npmrc
+            echo "Publishing to Azure Artifacts feed ${registry} (access=${access})."
+          else
+            # npm-compatible registry: bearer token as :_authToken. npm expands
+            # ${NODE_AUTH_TOKEN} at publish time, so it is not written in the clear.
+            {
+              echo "registry=${registry}"
+              echo "always-auth=true"
+              echo "//${host_path}:_authToken=\${NODE_AUTH_TOKEN}"
+            } > .npmrc
+            export NODE_AUTH_TOKEN="${NPM_TOKEN}"
+            # Provenance requires the public npm registry; opt in with NPM_PROVENANCE.
+            if [ "${registry}" = "https://registry.npmjs.org/" ] && [ "${NPM_PROVENANCE:-}" = "true" ]; then
+              provenance=(--provenance)
+            fi
+            echo "Publishing to ${registry} with a token (access=${access})."
+          fi
+
+          npm publish --registry "${registry}" --access "${access}" "${provenance[@]}"
