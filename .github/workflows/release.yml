@@ -51,7 +51,9 @@ jobs:
   #   - Any other npm-compatible registry: a bearer :_authToken.
   # Override the auto-detection with the NPM_AUTH_STYLE variable if needed.
   #
-  # Fork configuration (Settings -> Secrets and variables -> Actions):
+  # Fork configuration (Settings -> Secrets and variables -> Actions) — full
+  # guides live in docs/setup/reusing-in-a-fork.md and, for Azure Artifacts,
+  # docs/setup/publishing-to-azure-artifacts.md:
   #   secret   NPM_TOKEN           npm automation token, or (for Azure
   #                                Artifacts) a Personal Access Token with the
   #                                Packaging: Read & write scope. Pass the raw

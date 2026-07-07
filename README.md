@@ -267,75 +267,18 @@ version is tracked in `.release-please-manifest.json`. See
 
 ### One-time repository setup
 
-- Configure **npm Trusted Publishing** for the package: on npmjs.com open the
-  package → Settings → Trusted Publishers and add a GitHub Actions publisher for
-  repo `cadesalaberry/vitest-sentry-reporter` and workflow `release.yml`.
-  Publishing then uses short-lived OIDC credentials, so there is no `NPM_TOKEN`
-  secret to store or rotate and it is not blocked by account 2FA.
-- Enable **Allow GitHub Actions to create and approve pull requests** under
-  Settings → Actions → General → Workflow permissions, so release-please can
-  open its release PR.
+The one-time configuration of this repository (npm Trusted Publishing on
+npmjs.com, workflow permissions for release-please) is documented in
+[docs/setup/upstream-repository-setup.md](docs/setup/upstream-repository-setup.md).
 
 ### Reusing this workflow in a fork
 
-The CI and release workflows are fork-safe: nothing is hardcoded to the
-upstream repository in a way that would leak or misfire. Codecov uploads use
-the current repo's slug and never hard-fail a fork that has no `CODECOV_TOKEN`,
-and the release job only publishes when *you* configure it — a fork that merges
-a release PR without any publishing secret is skipped cleanly (it stays green
-instead of failing an OIDC publish it can't perform).
-
-To publish from your fork, add the following under **Settings → Secrets and
-variables → Actions**. The release job auto-selects token auth as soon as an
-`NPM_TOKEN` secret is present, and picks the right `.npmrc` auth format from the
-registry host.
-
-| Kind | Name | Purpose |
-|---|---|---|
-| Secret | `NPM_TOKEN` | npm automation token, **or** — for Azure Artifacts — a Personal Access Token with the *Packaging: Read & write* scope (pass the **raw** PAT; the workflow base64-encodes it as Azure requires). |
-| Variable | `NPM_REGISTRY_URL` | Target registry. Defaults to `https://registry.npmjs.org`. |
-| Variable | `NPM_PUBLISH_ACCESS` | `public` (default) or `restricted`. Use `restricted` for a private feed. |
-| Variable | `NPM_AUTH_STYLE` | `password` (Azure base64-PAT form) or `token` (bearer `_authToken`). Auto-detected from the registry host; set it only for a self-hosted Azure DevOps Server URL. |
-| Variable | `NPM_PROVENANCE` | `true` to attach [provenance](https://docs.npmjs.com/generating-provenance-statements) on token-based npmjs.org publishes. Ignored for other registries (provenance is npm-only). |
-
-#### Publish to your own npm account
-
-Set the `NPM_TOKEN` secret to an npm automation token. Leave the variables at
-their defaults (or set `NPM_PROVENANCE=true`). Update `name`, `repository`, and
-`homepage` in `package.json` to your fork before shipping so you don't clash
-with the upstream package name.
-
-#### Publish to a private Azure Artifacts feed
-
-For a complete, step-by-step walkthrough — creating the feed, getting the
-registry URL, granting publish permission, minting the PAT, and setting the
-secret/variables — see
-**[Publishing a fork to a private Azure Artifacts feed](docs/publishing-to-azure-artifacts.md)**.
-The short version:
-
-Point the workflow at your feed's npm registry endpoint:
-
-- `NPM_REGISTRY_URL` =
-  `https://pkgs.dev.azure.com/<ORG>/<PROJECT>/_packaging/<FEED>/npm/registry/`
-  (project-scoped) or
-  `https://pkgs.dev.azure.com/<ORG>/_packaging/<FEED>/npm/registry/`
-  (organization-scoped — omit the `<PROJECT>` segment).
-- `NPM_PUBLISH_ACCESS` = `restricted`.
-- `NPM_TOKEN` = an Azure DevOps **Personal Access Token** with *Packaging:
-  Read & write* scope (the raw PAT, not pre-encoded).
-
-The registry host is recognized as Azure Artifacts, so the job writes a project
-`.npmrc` in the [format Azure documents for a PAT][azure-npmrc]: `always-auth=true`
-plus `:username` / base64-encoded `:_password` / `:email` entries for **both**
-the `/npm/registry/` and `/npm/` feed paths, then runs
-`npm publish --registry <your feed>`. The base64 PAT is passed through an
-environment variable (never written to `.npmrc` in the clear) and masked in the
-logs. No Trusted Publisher and no npm OIDC are involved on this path. For a
-self-hosted Azure DevOps Server (a non-`pkgs.dev.azure.com` host), also set
-`NPM_AUTH_STYLE=password`.
-
-Rename the package to your feed's scope (e.g. `@your-org/vitest-sentry-reporter`)
-in `package.json`; scoped names are what Azure Artifacts expects.
-
-[azure-npmrc]: https://learn.microsoft.com/azure/devops/artifacts/npm/npmrc
+The CI and release workflows are fork-safe and reusable without editing any
+workflow file: forks get working CI out of the box, and can publish to their
+own npm account or a private Azure Artifacts feed by injecting a secret and a
+few variables. See
+[docs/setup/reusing-in-a-fork.md](docs/setup/reusing-in-a-fork.md) for the
+configuration reference, and
+[docs/setup/publishing-to-azure-artifacts.md](docs/setup/publishing-to-azure-artifacts.md)
+for the step-by-step Azure Artifacts walkthrough.
 

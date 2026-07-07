@@ -8,10 +8,9 @@ You do **not** need to edit any workflow file. The release workflow
 (`.github/workflows/release.yml`) already supports token-based publishing to a
 custom registry; you only add a secret and a couple of variables to your fork.
 For the design rationale see
-[ADR-0011](decisions/0011-make-release-workflow-fork-reusable.md); for the short
-version of all fork options see the
-[Reusing this workflow in a fork](../README.md#reusing-this-workflow-in-a-fork)
-section of the README.
+[ADR-0011](../decisions/0011-make-release-workflow-fork-reusable.md); for the
+short version of all fork options (including publishing to your own npm
+account) see [Reusing the workflows in a fork](reusing-in-a-fork.md).
 
 ## How it works
 
@@ -147,7 +146,7 @@ the version and updates `CHANGELOG.md`. For it to work on your fork:
 ## Step 8 — Cut a release
 
 1. Merge a change into your fork's `main` using a
-   [Conventional Commit](COMMIT_CONVENTION.md) message (`feat:` → minor,
+   [Conventional Commit](../COMMIT_CONVENTION.md) message (`feat:` → minor,
    `fix:` → patch). release-please opens or updates a release PR.
 2. When you're ready to ship, merge the release PR. That creates the `vX.Y.Z`
    tag and GitHub release, and triggers the `publish` job.
@@ -222,7 +221,8 @@ npm install @<your-scope>/vitest-sentry-reporter
 - Azure Artifacts — manage feed permissions (roles): <https://learn.microsoft.com/en-us/azure/devops/artifacts/feeds/feed-permissions>
 - Azure DevOps — use personal access tokens: [learn.microsoft.com][pat-guidance]
 - GitHub Actions — variables and secrets: <https://docs.github.com/actions/learn-github-actions/variables>
-- [ADR-0011: Make the release workflow reusable by forks](decisions/0011-make-release-workflow-fork-reusable.md)
+- [Reusing the workflows in a fork](reusing-in-a-fork.md)
+- [ADR-0011: Make the release workflow reusable by forks](../decisions/0011-make-release-workflow-fork-reusable.md)
 
 [azure-npmrc]: https://learn.microsoft.com/en-us/azure/devops/artifacts/npm/npmrc
 [pat-guidance]: https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate

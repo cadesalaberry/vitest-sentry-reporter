@@ -122,7 +122,8 @@ secrets and variables (no workflow edits required in a fork).
 
 ## References
 
-- How-to: [Publishing a fork to a private Azure Artifacts feed](../publishing-to-azure-artifacts.md)
+- How-to: [Reusing the workflows in a fork](../setup/reusing-in-a-fork.md)
+- How-to: [Publishing a fork to a private Azure Artifacts feed](../setup/publishing-to-azure-artifacts.md)
 - ADR-0006: Automate releases with release-please and Conventional Commits
 - npm trusted publishing (OIDC): https://docs.npmjs.com/trusted-publishers
 - npm provenance: https://docs.npmjs.com/generating-provenance-statements
