@@ -287,13 +287,15 @@ instead of failing an OIDC publish it can't perform).
 
 To publish from your fork, add the following under **Settings → Secrets and
 variables → Actions**. The release job auto-selects token auth as soon as an
-`NPM_TOKEN` secret is present.
+`NPM_TOKEN` secret is present, and picks the right `.npmrc` auth format from the
+registry host.
 
 | Kind | Name | Purpose |
 |---|---|---|
-| Secret | `NPM_TOKEN` | npm automation token, **or** an Azure Artifacts Personal Access Token used as the registry `_authToken`. |
+| Secret | `NPM_TOKEN` | npm automation token, **or** — for Azure Artifacts — a Personal Access Token with the *Packaging: Read & write* scope (pass the **raw** PAT; the workflow base64-encodes it as Azure requires). |
 | Variable | `NPM_REGISTRY_URL` | Target registry. Defaults to `https://registry.npmjs.org`. |
 | Variable | `NPM_PUBLISH_ACCESS` | `public` (default) or `restricted`. Use `restricted` for a private feed. |
+| Variable | `NPM_AUTH_STYLE` | `password` (Azure base64-PAT form) or `token` (bearer `_authToken`). Auto-detected from the registry host; set it only for a self-hosted Azure DevOps Server URL. |
 | Variable | `NPM_PROVENANCE` | `true` to attach [provenance](https://docs.npmjs.com/generating-provenance-statements) on token-based npmjs.org publishes. Ignored for other registries (provenance is npm-only). |
 
 #### Publish to your own npm account
@@ -311,14 +313,23 @@ Point the workflow at your feed's npm registry endpoint:
   `https://pkgs.dev.azure.com/<ORG>/<PROJECT>/_packaging/<FEED>/npm/registry/`
   (project-scoped) or
   `https://pkgs.dev.azure.com/<ORG>/_packaging/<FEED>/npm/registry/`
-  (organization-scoped).
+  (organization-scoped — omit the `<PROJECT>` segment).
 - `NPM_PUBLISH_ACCESS` = `restricted`.
 - `NPM_TOKEN` = an Azure DevOps **Personal Access Token** with *Packaging:
-  Read & write* scope. The workflow writes a project `.npmrc` that uses it as
-  the registry `_authToken` with `always-auth=true`, then runs
-  `npm publish --registry <your feed>`.
+  Read & write* scope (the raw PAT, not pre-encoded).
+
+The registry host is recognized as Azure Artifacts, so the job writes a project
+`.npmrc` in the [format Azure documents for a PAT][azure-npmrc]: `always-auth=true`
+plus `:username` / base64-encoded `:_password` / `:email` entries for **both**
+the `/npm/registry/` and `/npm/` feed paths, then runs
+`npm publish --registry <your feed>`. The base64 PAT is passed through an
+environment variable (never written to `.npmrc` in the clear) and masked in the
+logs. No Trusted Publisher and no npm OIDC are involved on this path. For a
+self-hosted Azure DevOps Server (a non-`pkgs.dev.azure.com` host), also set
+`NPM_AUTH_STYLE=password`.
 
 Rename the package to your feed's scope (e.g. `@your-org/vitest-sentry-reporter`)
-in `package.json`; scoped names are what Azure Artifacts expects. No Trusted
-Publisher and no npm OIDC are involved on this path.
+in `package.json`; scoped names are what Azure Artifacts expects.
+
+[azure-npmrc]: https://learn.microsoft.com/azure/devops/artifacts/npm/npmrc
 

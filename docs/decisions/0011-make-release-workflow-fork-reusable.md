@@ -41,14 +41,34 @@ secrets and variables (no workflow edits required in a fork).
 - **Auth path selection** (`release.yml`, `publish` job): if the `NPM_TOKEN`
   secret is empty, use Trusted Publishing (OIDC) exactly as before
   (`npm publish --provenance --access public`). If `NPM_TOKEN` is set, write a
-  project-local `.npmrc` that references the token as the registry `_authToken`
-  (via `${NODE_AUTH_TOKEN}`, so the token is never written to disk in the clear)
-  with `always-auth=true`, and publish to `NPM_REGISTRY_URL`.
+  project-local `.npmrc` and publish to `NPM_REGISTRY_URL`.
+- **Registry-aware auth format**: the token path auto-detects the `.npmrc`
+  format from the registry host, because npm and Azure Artifacts disagree on
+  how a token is presented:
+  - *npm-compatible registries* take a bearer token, so we write
+    `//host/path/:_authToken=${NODE_AUTH_TOKEN}`.
+  - *Azure Artifacts feeds* (`pkgs.dev.azure.com`, `*.pkgs.visualstudio.com`)
+    reject a PAT in `_authToken` — the Azure docs require a **base64-encoded
+    PAT** in `_password`, alongside a non-empty `username` and an `email`, and
+    credentials for **both** the `/npm/registry/` path (restore) and the `/npm/`
+    feed root (publish), with `always-auth=true`. The `_authToken` bearer form
+    Azure Pipelines uses comes from the `npmAuthenticate` task injecting a
+    short-lived OAuth token, not a PAT, so it does not apply to an external PAT
+    from GitHub Actions. The job base64-encodes the raw PAT and emits exactly
+    that layout.
+  - In both cases the credential is referenced through an environment variable
+    (`${NODE_AUTH_TOKEN}` / `${AZURE_NPM_PASSWORD}`) so it is never written to
+    `.npmrc` in the clear, and the derived base64 value is `::add-mask::`-ed out
+    of the logs.
 - **Configuration surface** (repository *variables*, non-secret):
   - `NPM_REGISTRY_URL` — target registry, defaulting to
     `https://registry.npmjs.org`. A private Azure Artifacts feed is expressed as
-    `https://pkgs.dev.azure.com/ORG/PROJECT/_packaging/FEED/npm/registry/`.
+    `https://pkgs.dev.azure.com/ORG/PROJECT/_packaging/FEED/npm/registry/`
+    (org-scoped feeds omit the `/PROJECT` segment).
   - `NPM_PUBLISH_ACCESS` — `public` (default) or `restricted` for a private feed.
+  - `NPM_AUTH_STYLE` — force `password` (Azure base64-PAT) or `token` (bearer);
+    auto-detected from the host when unset, so it is only needed for a
+    self-hosted Azure DevOps Server URL that is not on a recognized host.
   - `NPM_PROVENANCE` — opt in to provenance on token-based npmjs.org publishes;
     ignored for other registries because provenance is npm-only.
 - **Fork safety**: a fork that has *not* injected `NPM_TOKEN` and is not the
@@ -86,10 +106,16 @@ secrets and variables (no workflow edits required in a fork).
   build/install steps and the release-please gating, and forks would still have
   to edit files. A single job selecting the auth path by secret presence keeps
   one source of truth.
-- **Base64 `_password`/`username`/`email` `.npmrc` for Azure**: rejected in
-  favor of the simpler `_authToken` form, which Azure Artifacts accepts for a
-  PAT and which also works unchanged for npm automation tokens, so one code path
-  covers both registries.
+- **A single `_authToken` form for every registry**: rejected — it is simpler,
+  but the Azure Artifacts documentation only supports a PAT via a base64-encoded
+  `_password` (the `_authToken` bearer form is for in-pipeline OAuth tokens), so
+  a one-size path would silently fail to authenticate against a private Azure
+  feed. Auto-detecting the host and emitting the documented per-registry format
+  is what actually works.
+- **Requiring a pre-base64-encoded PAT in `NPM_TOKEN`**: rejected — encoding the
+  raw PAT inside the job is less error-prone for the user, keeps the secret's
+  input format identical across registries, and lets the same secret feed the
+  npmjs.org `_authToken` path unchanged.
 - **Gate publishing on a dedicated `PUBLISH_ENABLED` variable**: rejected —
   presence of `NPM_TOKEN` (or being the upstream repo) already expresses intent,
   so an extra flag would be redundant configuration.
@@ -99,7 +125,16 @@ secrets and variables (no workflow edits required in a fork).
 - ADR-0006: Automate releases with release-please and Conventional Commits
 - npm trusted publishing (OIDC): https://docs.npmjs.com/trusted-publishers
 - npm provenance: https://docs.npmjs.com/generating-provenance-statements
-- Use Azure Artifacts as a private npm registry:
-  https://learn.microsoft.com/azure/devops/artifacts/npm/npmrc
+- Azure Artifacts — connect to a feed (npm `.npmrc` format; base64 PAT in
+  `_password` for both the `/npm/registry/` and `/npm/` paths, `always-auth`):
+  https://learn.microsoft.com/en-us/azure/devops/artifacts/npm/npmrc
+- Azure Artifacts — publish and download npm packages (`npm publish` targets the
+  `/npm/registry/` URL, `publishConfig` registry override unsupported):
+  https://learn.microsoft.com/en-us/azure/devops/artifacts/get-started-npm
+- Azure Pipelines — `npmAuthenticate@0` (in-pipeline OAuth `_authToken`, the
+  form that does not apply to an external PAT):
+  https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/npm-authenticate-v0
+- npm `.npmrc` environment-variable expansion (`${VAR}` substitution):
+  https://docs.npmjs.com/cli/v10/configuring-npm/npmrc#auth-related-configuration
 - GitHub Actions — variables and secrets:
   https://docs.github.com/actions/learn-github-actions/variables

@@ -43,16 +43,30 @@ jobs:
   #      feed by injecting the secret + variables below. See docs/decisions/
   #      0011-*.md.
   #
+  # The token path auto-selects the auth format from the registry host:
+  #   - Azure Artifacts feeds (pkgs.dev.azure.com / *.pkgs.visualstudio.com):
+  #     a base64-encoded PAT in :_password, for both the /npm/registry/ and the
+  #     /npm/ feed-root paths, with always-auth=true — the form the Azure docs
+  #     require for a PAT (:_authToken is only for in-pipeline OAuth tokens).
+  #   - Any other npm-compatible registry: a bearer :_authToken.
+  # Override the auto-detection with the NPM_AUTH_STYLE variable if needed.
+  #
   # Fork configuration (Settings -> Secrets and variables -> Actions):
-  #   secret   NPM_TOKEN           npm automation token, or an Azure Artifacts
-  #                                Personal Access Token used as the registry
-  #                                _authToken.
+  #   secret   NPM_TOKEN           npm automation token, or (for Azure
+  #                                Artifacts) a Personal Access Token with the
+  #                                Packaging: Read & write scope. Pass the raw
+  #                                PAT; it is base64-encoded here as Azure needs.
   #   variable NPM_REGISTRY_URL    Target registry. Defaults to
   #                                https://registry.npmjs.org. For a private
   #                                Azure Artifacts feed use, e.g.:
   #                                https://pkgs.dev.azure.com/ORG/PROJECT/_packaging/FEED/npm/registry/
+  #                                (org-scoped feeds omit the /PROJECT segment).
   #   variable NPM_PUBLISH_ACCESS  'public' (default) or 'restricted' (use
   #                                'restricted' for a private Azure feed).
+  #   variable NPM_AUTH_STYLE      'password' (Azure base64 PAT) or 'token'
+  #                                (bearer _authToken). Auto-detected from the
+  #                                registry host when unset; set it for a
+  #                                self-hosted Azure DevOps Server URL.
   #   variable NPM_PROVENANCE      'true' to attach provenance on token-based
   #                                npmjs.org publishes; ignored for other
   #                                registries (provenance is npm-only).
@@ -96,6 +110,7 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_REGISTRY_URL: ${{ vars.NPM_REGISTRY_URL }}
           NPM_PUBLISH_ACCESS: ${{ vars.NPM_PUBLISH_ACCESS }}
+          NPM_AUTH_STYLE: ${{ vars.NPM_AUTH_STYLE }}
           NPM_PROVENANCE: ${{ vars.NPM_PROVENANCE }}
           UPSTREAM_REPO: cadesalaberry/vitest-sentry-reporter
         run: |
@@ -121,30 +136,61 @@ jobs:
             exit 0
           fi
 
-          # Token auth: publish to NPM_REGISTRY_URL (defaults to npmjs.org).
-          # Works for a fork's own npm account or a private Azure Artifacts feed.
+          # Token auth: publish to NPM_REGISTRY_URL (defaults to npmjs.org). The
+          # project-local .npmrc takes precedence over setup-node's config.
           registry="${NPM_REGISTRY_URL:-https://registry.npmjs.org}"
           case "${registry}" in */) ;; *) registry="${registry}/" ;; esac
-          # Derive the //host/path/ key npm uses for the per-registry _authToken.
-          registry_key="//${registry#*://}"
+          host_path="${registry#*://}"   # host/path/ (scheme stripped)
 
-          # A project-local .npmrc takes precedence over setup-node's config.
-          # The token is referenced (not written) so it is never on disk in the
-          # clear; npm expands ${NODE_AUTH_TOKEN} at publish time.
-          {
-            echo "registry=${registry}"
-            echo "${registry_key}:_authToken=\${NODE_AUTH_TOKEN}"
-            echo "always-auth=true"
-          } > .npmrc
-
-          # Provenance requires the public npm registry; opt in with NPM_PROVENANCE.
-          provenance=()
-          if [ "${registry}" = "https://registry.npmjs.org/" ] && [ "${NPM_PROVENANCE:-}" = "true" ]; then
-            provenance=(--provenance)
+          # Choose the auth format. Azure Artifacts requires a base64-encoded PAT
+          # in :_password; every other npm-compatible registry takes a bearer
+          # :_authToken. Auto-detect from the host, override with NPM_AUTH_STYLE.
+          style="${NPM_AUTH_STYLE:-}"
+          if [ -z "${style}" ]; then
+            case "${host_path}" in
+              pkgs.dev.azure.com/*|*.pkgs.visualstudio.com/*) style=password ;;
+              *) style=token ;;
+            esac
           fi
 
-          echo "Publishing to ${registry} with a token (access=${access})."
-          NODE_AUTH_TOKEN="${NPM_TOKEN}" npm publish \
-            --registry "${registry}" \
-            --access "${access}" \
-            "${provenance[@]}"
+          provenance=()
+          if [ "${style}" = "password" ]; then
+            # Azure Artifacts: the PAT must be base64-encoded in :_password, with
+            # credentials for both the /npm/registry/ path (restore) and the
+            # /npm/ feed root (publish). See docs/decisions/0011-*.md for the
+            # Azure references. The encoded PAT is referenced via
+            # ${AZURE_NPM_PASSWORD} so it is never written to .npmrc in the clear,
+            # and the derived value is masked in the logs.
+            AZURE_NPM_PASSWORD="$(printf '%s' "${NPM_TOKEN}" | base64 -w0)"
+            echo "::add-mask::${AZURE_NPM_PASSWORD}"
+            export AZURE_NPM_PASSWORD
+            keys=("//${host_path}")
+            root_key="//${host_path%registry/}"
+            if [ "${root_key}" != "//${host_path}" ]; then keys+=("${root_key}"); fi
+            {
+              echo "registry=${registry}"
+              echo "always-auth=true"
+              for key in "${keys[@]}"; do
+                echo "${key}:username=vsts-npm-token"
+                echo "${key}:_password=\${AZURE_NPM_PASSWORD}"
+                echo "${key}:email=npm-requires-email@example.invalid"
+              done
+            } > .npmrc
+            echo "Publishing to Azure Artifacts feed ${registry} (access=${access})."
+          else
+            # npm-compatible registry: bearer token as :_authToken. npm expands
+            # ${NODE_AUTH_TOKEN} at publish time, so it is not written in the clear.
+            {
+              echo "registry=${registry}"
+              echo "always-auth=true"
+              echo "//${host_path}:_authToken=\${NODE_AUTH_TOKEN}"
+            } > .npmrc
+            export NODE_AUTH_TOKEN="${NPM_TOKEN}"
+            # Provenance requires the public npm registry; opt in with NPM_PROVENANCE.
+            if [ "${registry}" = "https://registry.npmjs.org/" ] && [ "${NPM_PROVENANCE:-}" = "true" ]; then
+              provenance=(--provenance)
+            fi
+            echo "Publishing to ${registry} with a token (access=${access})."
+          fi
+
+          npm publish --registry "${registry}" --access "${access}" "${provenance[@]}"
