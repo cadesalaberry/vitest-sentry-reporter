@@ -4,24 +4,23 @@ This guide walks through forking `vitest-sentry-reporter` and configuring the
 fork's release workflow to publish the package to an **internal (private) Azure
 Artifacts npm feed** instead of the public npm registry.
 
-You do **not** need to edit any workflow file. The release workflow
-(`.github/workflows/release.yml`) already supports token-based publishing to a
-custom registry; you only add a secret and a couple of variables to your fork.
-For the design rationale see
-[ADR-0011](../decisions/0011-make-release-workflow-fork-reusable.md); for the
-short version of all fork options (including publishing to your own npm
-account) see [Reusing the workflows in a fork](reusing-in-a-fork.md).
+It covers only what is specific to Azure: everything you do in Azure DevOps,
+and which value lands in which GitHub setting. What the secret and each
+variable mean, publishing to your own npm account instead, and the general
+fork-safety guarantees are documented once in
+[Reusing the workflows in a fork](reusing-in-a-fork.md) (design rationale:
+[ADR-0011](../decisions/0011-make-release-workflow-fork-reusable.md)). No
+workflow file needs to be edited.
 
 ## How it works
 
-When release-please cuts a release on your fork's `main`, the `publish` job runs.
-Because you set an `NPM_TOKEN` secret, it uses token auth instead of the
-upstream's OIDC Trusted Publishing, and because the registry host is
-`pkgs.dev.azure.com`, it writes the `.npmrc` in the exact format Azure Artifacts
-requires for a Personal Access Token: `always-auth=true` plus base64-encoded
-`_password` credentials for both the `/npm/registry/` and `/npm/` feed paths.
-The raw PAT is base64-encoded inside the job, referenced through an environment
-variable (never written to `.npmrc` in the clear), and masked in the logs.
+When release-please cuts a release on your fork's `main`, the `publish` job
+runs and — because `NPM_TOKEN` is set and the registry host is Azure's — writes
+the `.npmrc` in the exact format Azure Artifacts requires for a Personal Access
+Token: `always-auth=true` plus base64-encoded `_password` credentials for both
+the `/npm/registry/` and `/npm/` feed paths. The raw PAT is base64-encoded
+inside the job, referenced through an environment variable (never written to
+`.npmrc` in the clear), and masked in the logs.
 
 ## Prerequisites
 
@@ -126,24 +125,19 @@ Add these **variables** (the **Variables** tab → **New repository variable**):
 | `NPM_PUBLISH_ACCESS` | `restricted` | private feed → restricted |
 | `NPM_AUTH_STYLE` | *(only for Azure DevOps **Server**)* `password` | see note below |
 
-Notes:
+What each name means is documented once in the
+[configuration reference](reusing-in-a-fork.md#configuration-reference).
+Azure-specific notes: `NPM_AUTH_STYLE` is only needed when a **self-hosted
+Azure DevOps Server** hostname prevents auto-detection (`pkgs.dev.azure.com`
+and `*.pkgs.visualstudio.com` are recognized), and `NPM_PROVENANCE` should stay
+unset — provenance is an npmjs.org-only feature.
 
-- `NPM_AUTH_STYLE` is **not needed** for Azure DevOps Services
-  (`pkgs.dev.azure.com`) or `*.pkgs.visualstudio.com` — the workflow detects
-  those hosts automatically. Set it to `password` only if your feed is on a
-  **self-hosted Azure DevOps Server** with a different hostname.
-- Leave `NPM_PROVENANCE` unset. Provenance is an npmjs.org-only feature and is
-  ignored for Azure feeds.
+Finally, enable **Allow GitHub Actions to create and approve pull requests**
+under **Settings → Actions → General → Workflow permissions** (needed on any
+fork, as the configuration reference notes) so release-please can open the
+release PR that drives publishing.
 
-## Step 7 — Allow release-please to open its release PR
-
-Releases are automated with release-please, which opens a "release PR" that bumps
-the version and updates `CHANGELOG.md`. For it to work on your fork:
-
-1. Go to **Settings → Actions → General → Workflow permissions**.
-2. Enable **Allow GitHub Actions to create and approve pull requests**.
-
-## Step 8 — Cut a release
+## Step 7 — Cut a release
 
 1. Merge a change into your fork's `main` using a
    [Conventional Commit](../COMMIT_CONVENTION.md) message (`feat:` → minor,

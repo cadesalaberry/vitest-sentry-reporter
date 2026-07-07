@@ -39,13 +39,6 @@ with the upstream package name.
 
 Follow the dedicated step-by-step guide —
 **[Publishing a fork to a private Azure Artifacts feed](publishing-to-azure-artifacts.md)** —
-which covers creating the feed, getting the registry URL, granting publish
-permission, minting the PAT, and setting the secret and variables above. In
-short: `NPM_REGISTRY_URL` = your feed's `/npm/registry/` URL,
-`NPM_PUBLISH_ACCESS` = `restricted`, `NPM_TOKEN` = a raw Azure DevOps PAT with
-*Packaging: Read & write* scope. The workflow recognizes the Azure host and
-writes the `.npmrc` in the [format Azure documents for a PAT][azure-npmrc]
-(base64 `_password` for both feed paths, `always-auth=true`), keeping the
-secret out of the file and masked in the logs.
-
-[azure-npmrc]: https://learn.microsoft.com/azure/devops/artifacts/npm/npmrc
+which walks through the Azure DevOps side (creating the feed, getting the
+registry URL, granting publish permission, minting the PAT) and maps each value
+onto the configuration above.
