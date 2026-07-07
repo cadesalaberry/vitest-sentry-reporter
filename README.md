@@ -307,6 +307,12 @@ with the upstream package name.
 
 #### Publish to a private Azure Artifacts feed
 
+For a complete, step-by-step walkthrough — creating the feed, getting the
+registry URL, granting publish permission, minting the PAT, and setting the
+secret/variables — see
+**[Publishing a fork to a private Azure Artifacts feed](docs/publishing-to-azure-artifacts.md)**.
+The short version:
+
 Point the workflow at your feed's npm registry endpoint:
 
 - `NPM_REGISTRY_URL` =
