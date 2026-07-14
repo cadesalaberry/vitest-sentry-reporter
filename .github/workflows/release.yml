@@ -96,7 +96,7 @@ jobs:
         run: bun run build
 
       - name: Setup Node for npm registry
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
           # OIDC trusted publishing only targets the public npm registry; the
