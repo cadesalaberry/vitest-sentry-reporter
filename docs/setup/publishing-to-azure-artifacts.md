@@ -14,8 +14,12 @@ workflow file needs to be edited.
 
 ## How it works
 
-When release-please cuts a release on your fork's `main`, the `publish` job
-runs and — because `NPM_TOKEN` is set and the registry host is Azure's — writes
+On every push to your fork's `main` — typically a rebase onto upstream, see
+[Syncing and publishing](reusing-in-a-fork.md#syncing-and-publishing-rebase-to-publish)
+— the `publish` job runs (release-please itself runs only upstream, per
+[ADR-0012](../decisions/0012-fork-publishing-by-rebase.md)). The job skips
+cleanly when the current `package.json` version is already in your feed;
+otherwise — because `NPM_TOKEN` is set and the registry host is Azure's — it writes
 the `.npmrc` in the exact format Azure Artifacts requires for a Personal Access
 Token: `always-auth=true` plus base64-encoded `_password` credentials for both
 the `/npm/registry/` and `/npm/` feed paths. The raw PAT is base64-encoded
@@ -102,8 +106,8 @@ organization. In your fork's `package.json`:
 }
 ```
 
-Commit this change to your fork's `main` (through a PR, so the PR-title check and
-release-please stay happy). Scoping also makes the `restricted` access level in
+Commit this change to your fork's `main` (through a PR, so the PR-title check
+stays happy). Scoping also makes the `restricted` access level in
 Step 6 meaningful and lets consumers map the scope to your feed (see
 [Consuming the package](#consuming-the-package)).
 
@@ -132,26 +136,33 @@ Azure DevOps Server** hostname prevents auto-detection (`pkgs.dev.azure.com`
 and `*.pkgs.visualstudio.com` are recognized), and `NPM_PROVENANCE` should stay
 unset — provenance is an npmjs.org-only feature.
 
-Finally, enable **Allow GitHub Actions to create and approve pull requests**
-under **Settings → Actions → General → Workflow permissions** (needed on any
-fork, as the configuration reference notes) so release-please can open the
-release PR that drives publishing.
+## Step 7 — Sync and publish
 
-## Step 7 — Cut a release
+Versioning happens upstream: release-please never runs on forks
+([ADR-0012](../decisions/0012-fork-publishing-by-rebase.md)), so your fork
+needs no tags and no release PRs.
 
-1. Merge a change into your fork's `main` using a
-   [Conventional Commit](../COMMIT_CONVENTION.md) message (`feat:` → minor,
-   `fix:` → patch). release-please opens or updates a release PR.
-2. When you're ready to ship, merge the release PR. That creates the `vX.Y.Z`
-   tag and GitHub release, and triggers the `publish` job.
-3. Watch **Actions → Release**. In the **Publish** step you should see:
+1. Rebase your fork's `main` onto upstream and force-push:
+
+   ```bash
+   git remote add upstream https://github.com/cadesalaberry/vitest-sentry-reporter.git   # once
+   git fetch upstream
+   git rebase upstream/main
+   git push --force-with-lease origin main
+   ```
+
+2. Watch **Actions → Release**. release-please shows as skipped; in the
+   **Publish** step you should see:
 
    ```
    Publishing to Azure Artifacts feed https://pkgs.dev.azure.com/.../npm/registry/ (access=restricted).
    ```
 
-   followed by npm's publish output. The package now appears in your feed under
-   **Artifacts**.
+   followed by npm's publish output and `Published @<your-scope>/vitest-sentry-reporter@X.Y.Z …`.
+   The package now appears in your feed under **Artifacts**. If the current
+   version is already in the feed, the job logs
+   `… is already published … — skipping publish.` and stays green — expected
+   between upstream releases.
 
 ## Consuming the package
 
@@ -185,12 +196,14 @@ npm install @<your-scope>/vitest-sentry-reporter
   **Connect to feed** (Step 2). Project-scoped URLs include `/<PROJECT>/`;
   org-scoped URLs must not.
 - **Publish is skipped entirely** — the job only publishes when `NPM_TOKEN` is
-  set (or on the upstream repo). Confirm the secret exists on the fork and that
-  the release PR was actually merged (the job runs only when release-please cut a
-  release).
-- **`EPUBLISHCONFLICT` / version already exists** — that version is already in
-  the feed. Let release-please bump the version (Azure feeds are immutable per
-  version) rather than republishing.
+  set; confirm the secret exists on the fork. A skip is also the expected
+  outcome when the current `package.json` version is already in the feed (the
+  log says which case applies).
+- **`EPUBLISHCONFLICT` / version already exists** — the workflow pre-checks the
+  feed and treats duplicate-version rejections as an idempotent skip, so this
+  should never fail a run. That version is already in the feed (Azure feeds are
+  immutable per version); a new version arrives by rebasing onto the next
+  upstream release.
 - **Self-hosted server auth fails** — set `NPM_AUTH_STYLE=password` so the job
   uses the base64-PAT format on a non-`pkgs.dev.azure.com` host.
 

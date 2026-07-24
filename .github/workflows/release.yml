@@ -3,6 +3,10 @@ name: Release
 on:
   push:
     branches: [ main ]
+  # Manual re-run, mainly for forks: re-publish after fixing configuration or a
+  # transient registry failure. Publishing is idempotent, so a dispatch when the
+  # current version is already on the registry skips cleanly.
+  workflow_dispatch:
 
 # No permissions by default; each job opts into exactly what it needs.
 permissions: {}
@@ -11,6 +15,12 @@ jobs:
   # Maintains a release PR that bumps the version and CHANGELOG.md from
   # Conventional Commits. Merging that PR creates the git tag + GitHub release.
   release-please:
+    # Versioning happens only upstream: forks track upstream versions by
+    # rebasing onto upstream main and must never open their own release PRs —
+    # without upstream's tags they would miscompute versions. See
+    # docs/decisions/0012-fork-publishing-by-rebase.md. Keep this literal in
+    # sync with the publish job's `if` and its UPSTREAM_REPO env below.
+    if: github.repository == 'cadesalaberry/vitest-sentry-reporter'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -26,7 +36,16 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # Publishes the package when release-please cut a new release.
+  # Publishes the package.
+  #
+  # When it runs (see docs/decisions/0012-fork-publishing-by-rebase.md):
+  #   - Upstream: only when release-please cut a new release — exactly once
+  #     per version, via OIDC.
+  #   - Forks: on every push to main ("rebase to publish") and on manual
+  #     dispatch. release-please never runs on forks, so the step below
+  #     publishes the current package.json version and skips when that exact
+  #     version is already on the target registry (or when no NPM_TOKEN is
+  #     configured).
   #
   # Two auth paths, selected automatically by whether an NPM_TOKEN secret is
   # present, so this workflow is reusable by forks without editing it:
@@ -75,7 +94,14 @@ jobs:
   publish:
     name: Publish package
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    # Upstream: run only when release-please cut a release. Forks:
+    # release-please is skipped there (a skipped job's outputs read as empty
+    # strings), so run on every push/dispatch instead — the publish step is
+    # idempotent and self-skips when unconfigured or already published.
+    # `!cancelled()` replaces the implicit success() so a *skipped*
+    # release-please doesn't block the fork path, while a *failed* upstream
+    # release-please still blocks publishing (release_created stays empty).
+    if: ${{ !cancelled() && (needs.release-please.outputs.release_created == 'true' || github.repository != 'cadesalaberry/vitest-sentry-reporter') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -195,4 +221,33 @@ jobs:
             echo "Publishing to ${registry} with a token (access=${access})."
           fi
 
-          npm publish --registry "${registry}" --access "${access}" "${provenance[@]}"
+          # Idempotency: forks publish on every push to main ("rebase to
+          # publish", ADR-0012), so between upstream releases the version is
+          # unchanged — skip when this exact version is already on the
+          # registry. npm view runs against the .npmrc written above (Azure
+          # requires auth even for reads). Any lookup failure (E404, network)
+          # falls through to the publish attempt, which surfaces the real error.
+          pkg_name="$(node -p "require('./package.json').name")"
+          pkg_version="$(node -p "require('./package.json').version")"
+          pkg_spec="${pkg_name}@${pkg_version}"
+          if npm view "${pkg_spec}" version --registry "${registry}" >/dev/null 2>&1; then
+            echo "${pkg_spec} is already published to ${registry} — skipping publish."
+            exit 0
+          fi
+
+          # Treat a duplicate-version rejection as benign (two pushes racing,
+          # or a version the pre-check missed): either way this exact version
+          # is on the registry, which is the goal.
+          set +e
+          publish_output="$(npm publish --registry "${registry}" --access "${access}" "${provenance[@]}" 2>&1)"
+          publish_status=$?
+          set -e
+          printf '%s\n' "${publish_output}"
+          if [ "${publish_status}" -ne 0 ]; then
+            if printf '%s' "${publish_output}" | grep -qiE 'EPUBLISHCONFLICT|E409|409 Conflict|cannot publish over|already (exists|contains)'; then
+              echo "${pkg_spec} was already on ${registry} — treating as published."
+              exit 0
+            fi
+            exit "${publish_status}"
+          fi
+          echo "Published ${pkg_spec} to ${registry}."

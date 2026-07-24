@@ -2,12 +2,15 @@
 
 The CI and release workflows are fork-safe: nothing is hardcoded to the
 upstream repository in a way that would leak or misfire. Codecov uploads use
-the current repo's slug and never hard-fail a fork that has no `CODECOV_TOKEN`,
-and the release job only publishes when *you* configure it — a fork that merges
-a release PR without any publishing secret is skipped cleanly (it stays green
-instead of failing an OIDC publish it can't perform). No workflow files need to
-be edited. For the design rationale see
-[ADR-0011](../decisions/0011-make-release-workflow-fork-reusable.md).
+the current repo's slug and never hard-fail a fork that has no `CODECOV_TOKEN`.
+Versioning stays upstream — the release-please job runs **only on the upstream
+repository**, never on forks. A fork publishes by tracking upstream: on every
+push to the fork's `main`, the publish job ships the current `package.json`
+version to the registry *you* configure, and skips cleanly when no publishing
+secret is set or when that exact version is already published. No workflow
+files need to be edited. For the design rationale see
+[ADR-0011](../decisions/0011-make-release-workflow-fork-reusable.md) and
+[ADR-0012](../decisions/0012-fork-publishing-by-rebase.md).
 
 ## Configuration reference
 
@@ -24,9 +27,26 @@ registry host.
 | Variable | `NPM_AUTH_STYLE` | `password` (Azure base64-PAT form) or `token` (bearer `_authToken`). Auto-detected from the registry host; set it only for a self-hosted Azure DevOps Server URL. |
 | Variable | `NPM_PROVENANCE` | `true` to attach [provenance](https://docs.npmjs.com/generating-provenance-statements) on token-based npmjs.org publishes. Ignored for other registries (provenance is npm-only). |
 
-Also enable **Allow GitHub Actions to create and approve pull requests** under
-**Settings → Actions → General → Workflow permissions**, so release-please can
-open its release PR on your fork.
+## Syncing and publishing (rebase to publish)
+
+Forks do not run release-please and need no tags: version numbers, changelogs,
+and releases are upstream concerns. To pick up new upstream releases, rebase
+your fork's `main` onto upstream and force-push:
+
+```bash
+git remote add upstream https://github.com/cadesalaberry/vitest-sentry-reporter.git   # once
+git fetch upstream
+git rebase upstream/main
+git push --force-with-lease origin main
+```
+
+The push triggers the release workflow: release-please is skipped (not the
+upstream repo), and the publish job publishes the rebased `package.json`
+version unless it is already on your registry — so pushing between upstream
+releases is a clean no-op. Fork-only commits ride on top of upstream and are
+published the next time the version changes via rebase. To re-run publishing
+manually (say, after rotating a token), use **Actions → Release → Run
+workflow** (`workflow_dispatch`).
 
 ## Publish to your own npm account
 
