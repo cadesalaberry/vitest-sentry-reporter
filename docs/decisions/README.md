@@ -22,6 +22,7 @@ This directory contains Architectural Decision Records using MADR (Markdown Arch
 | [0009](0009-surface-ci-run-url.md) | Surface the CI run URL on reported failures | accepted | 2026-06-18 |
 | [0010](0010-relativize-test-file-and-surface-ci-links.md) | Relativize test_file for grouping and surface CI links and project name | accepted | 2026-06-18 |
 | [0011](0011-make-release-workflow-fork-reusable.md) | Make the release workflow reusable by forks (token / Azure Artifacts publishing) | accepted | 2026-07-06 |
+| [0012](0012-fork-publishing-by-rebase.md) | Run release-please only upstream and publish forks by rebase | accepted | 2026-07-24 |
 
 ADRs are numbered sequentially in the chronological order in which they were decided.
 
