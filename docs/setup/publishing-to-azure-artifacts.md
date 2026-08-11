@@ -154,7 +154,7 @@ needs no tags and no release PRs.
 2. Watch **Actions → Release**. release-please shows as skipped; in the
    **Publish** step you should see:
 
-   ```
+   ```text
    Publishing to Azure Artifacts feed https://pkgs.dev.azure.com/.../npm/registry/ (access=restricted).
    ```
 
@@ -200,10 +200,11 @@ npm install @<your-scope>/vitest-sentry-reporter
   outcome when the current `package.json` version is already in the feed (the
   log says which case applies).
 - **`EPUBLISHCONFLICT` / version already exists** — the workflow pre-checks the
-  feed and treats duplicate-version rejections as an idempotent skip, so this
-  should never fail a run. That version is already in the feed (Azure feeds are
-  immutable per version); a new version arrives by rebasing onto the next
-  upstream release.
+  feed and treats recognized duplicate-version responses (`EPUBLISHCONFLICT`,
+  HTTP 409, "already exists") as a successful skip; a rejection worded in a way
+  it does not recognize still fails the run with npm's full output. Either way
+  that version is already in the feed (Azure feeds are immutable per version);
+  a new version arrives by rebasing onto the next upstream release.
 - **Self-hosted server auth fails** — set `NPM_AUTH_STYLE=password` so the job
   uses the base64-PAT format on a non-`pkgs.dev.azure.com` host.
 

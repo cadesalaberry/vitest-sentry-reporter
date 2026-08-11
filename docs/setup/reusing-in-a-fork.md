@@ -46,7 +46,8 @@ version unless it is already on your registry — so pushing between upstream
 releases is a clean no-op. Fork-only commits ride on top of upstream and are
 published the next time the version changes via rebase. To re-run publishing
 manually (say, after rotating a token), use **Actions → Release → Run
-workflow** (`workflow_dispatch`).
+workflow** (`workflow_dispatch`) and leave the branch selector on `main` —
+publishing must run from your fork's `main` so it ships the rebased version.
 
 ## Publish to your own npm account
 
