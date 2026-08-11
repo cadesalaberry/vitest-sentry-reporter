@@ -8,92 +8,93 @@ authors:
 
 ## Context
 
-ADR-0011 made the release workflow reusable by forks: publishing is configured
-entirely through secrets/variables, and a fork can target its own npm account
-or a private Azure Artifacts feed. But the *versioning* half of the workflow —
-the release-please job — still ran on every fork's `main`.
+ADR-0011 made the release workflow usable by forks. A fork configures
+publication with one secret and some variables. It can publish to its own npm
+account or to a private Azure Artifacts feed. But the release-please job
+continued to run on each fork's `main`.
 
-That is broken by construction for a fork that only tracks upstream:
+This does not operate correctly on a fork that tracks upstream:
 
-- A fresh fork has none of upstream's `vX.Y.Z` tags, so release-please cannot
-  find the last release and miscomputes the next version from whatever history
-  heuristics it lands on. Observed in practice: a fork whose `main` was at
-  `1.4.1` got a release PR proposing "release 1.0.3".
-- A tracking fork does not *want* its own versioning. Its job is to republish
-  upstream's versions to its own registry; version numbers, changelogs, and
-  tags are upstream concerns. Fork-local release PRs are pure noise, and
-  merging one would fork the version history (rebase conflicts on
-  `package.json`/`CHANGELOG.md` every sync thereafter).
-- The publish job only ran when release-please created a release, so a fork
-  that (correctly) never merges fork-local release PRs could never publish.
+- A new fork has none of the upstream `vX.Y.Z` tags. Without tags,
+  release-please cannot find the last release and calculates an incorrect
+  next version. Observed: a fork with `main` at version 1.4.1 got a release
+  PR for "release 1.0.3".
+- A tracking fork must not set its own versions. Its function is to publish
+  the upstream versions to a different registry. Versions, changelogs, and
+  tags are upstream data. A fork-local release PR is unwanted, and a merge of
+  one splits the version history. Each subsequent sync then has rebase
+  conflicts on `package.json` and `CHANGELOG.md`.
+- The publish job ran only when release-please made a release. A fork that
+  correctly does not merge fork-local release PRs could not publish.
 
-The sync model we actually want for forks is **rebase to publish**: pull
-upstream's `main` (which already contains the release-please version bumps and
-changelog), rebase the fork's small delta on top, force-push — and the
-workflow publishes that version to the fork's registry if it isn't there yet.
+The sync procedure we want for forks is "rebase to publish": get the upstream
+`main` (it contains the version and the changelog), rebase the fork's delta
+on it, and push. The workflow then publishes that version to the fork's
+registry, unless the registry already has it.
 
 ## Decision
 
-- **Gate the `release-please` job to the upstream repository**
+- **The `release-please` job runs only on the upstream repository**
   (`if: github.repository == 'cadesalaberry/vitest-sentry-reporter'`).
-  Forks never run release-please and need none of its setup (no
-  "allow Actions to create PRs" toggle, no tags).
-- **Run the `publish` job on forks on every push to `main`** (and on manual
-  `workflow_dispatch`, added as a re-publish lever). The job's condition
-  becomes `!cancelled() && (release_created == 'true' || repository !=
-  upstream)`: upstream keeps publishing exactly once per release (OIDC path
-  unchanged), while on forks the skipped release-please job — whose outputs
-  evaluate to empty strings — no longer blocks publishing. A *failed* upstream
-  release-please still blocks the publish job (`release_created` stays empty).
-- **Make the token-path publish idempotent.** Before publishing, the job reads
-  `name`/`version` from `package.json` and checks the target registry (with
-  the freshly written `.npmrc` — Azure Artifacts requires auth even for
-  reads). If that exact version is already published, it skips cleanly; a
-  duplicate-version rejection at publish time (races, pre-check
-  false-negatives) is likewise treated as success. Between upstream releases a
-  fork's rebase pushes are therefore green no-ops.
-- **Fork sync contract**: `git fetch upstream && git rebase upstream/main &&
-  git push --force-with-lease origin main`. Documented in the setup guides.
+  release-please does not run on forks. Forks do not need its setup: no
+  "allow Actions to create PRs" setting and no tags.
+- **The `publish` job runs on forks on each push to `main`** and on manual
+  `workflow_dispatch` (a new trigger). The job condition is `!cancelled() &&
+  (release_created == 'true' || repository != upstream)`. Upstream publishes
+  one time for each release; the OIDC path is unchanged. On forks, the
+  skipped release-please job has empty outputs and does not block the publish
+  job. A failed upstream release-please blocks the publish job, because
+  `release_created` stays empty.
+- **The token-path publication is idempotent.** Before it publishes, the job
+  reads `name` and `version` from `package.json` and examines the target
+  registry. The check uses the `.npmrc` that the job wrote before, because
+  Azure Artifacts requires authentication for reads. If the registry has that
+  exact version, the job stops without an error. The job also accepts a
+  recognized duplicate-version rejection as a success. A push between
+  upstream releases completes without an error and has no effect.
+- **Fork sync procedure**: `git fetch upstream && git rebase upstream/main &&
+  git push --force-with-lease origin main`. The setup guides show this
+  procedure.
 
 ## Consequences
 
-- A tracking fork's entire release process is one rebase + force-push;
-  versions, tags, and changelog stay upstream-owned and conflict-free.
-- Forks no longer produce bogus release PRs, and the "Allow GitHub Actions to
-  create and approve pull requests" setting is no longer needed on forks.
-- The publish job now runs (checkout, install, build) on every fork-main push
-  even for forks that configured nothing, then exits at the no-token guard.
-  Accepted: secrets cannot be read in a job-level `if`, and the build doubles
-  as a smoke check of the fork's `main`.
-- Fork-local commits ride on top of upstream unpublished until the next
-  version arrives via rebase (the current version is already on the feed, so
-  pushes skip). A fork that wants independently versioned releases is out of
-  scope by design — it would need to edit the workflow.
-- The upstream flow, including npm Trusted Publishing (OIDC) and provenance,
-  is byte-identical; the workflow file was not renamed, so the npm Trusted
-  Publisher binding (repo + workflow file) is unaffected.
+- The release procedure of a tracking fork is one rebase and one push.
+  Versions, tags, and the changelog stay upstream data and cause no
+  conflicts.
+- Forks do not make incorrect release PRs. Forks do not need the "Allow
+  GitHub Actions to create and approve pull requests" setting.
+- The publish job runs checkout, install, and build on each fork push to
+  `main`, also on forks with no configuration. Then the no-token check stops
+  it. This is accepted: a job-level `if` cannot read secrets, and the build
+  is a test of the fork's `main`.
+- Fork-local commits stay unpublished until a rebase changes the version. A
+  fork that wants its own versions is not supported: it must change the
+  workflow.
+- The upstream flow is identical, with npm Trusted Publishing (OIDC) and
+  provenance. The workflow file name did not change, so the npm Trusted
+  Publisher connection (repository + workflow file) is not changed.
 
 ## Alternatives
 
-- **Keep release-please on forks with fork-local manifests/tags**: rejected —
-  requires per-fork bootstrap (tags, manifest, config), duplicates version
-  bookkeeping already done upstream, and guarantees rebase conflicts on
-  version-bump commits.
-- **Tag-triggered publishing on forks**: rejected — tracking forks have no
-  tags by contract (rebase + force-push does not transfer upstream tags), and
-  minting fork tags reintroduces the bookkeeping this ADR removes.
-- **A separate fork-only publish workflow file**: already rejected in
-  ADR-0011 — duplicated build steps and forks editing workflow files.
+- **Keep release-please on forks, with fork-local manifests and tags**:
+  rejected. Each fork needs a bootstrap (tags, manifest, configuration), the
+  version data exists two times, and version-bump commits cause rebase
+  conflicts.
+- **Publish forks from tags**: rejected. A tracking fork has no tags (a
+  branch push does not move tags), and fork tags add the bookkeeping that
+  this ADR removes.
+- **A separate workflow file for fork publication**: rejected in ADR-0011.
+  It copies the build steps, and forks must edit files.
 
 ## References
 
-- Amends [ADR-0011](0011-make-release-workflow-fork-reusable.md): the
-  fork-configurable *auth/registry* mechanism is unchanged; this ADR changes
-  *when* forks publish and stops release-please on forks.
+- Amends [ADR-0011](0011-make-release-workflow-fork-reusable.md). The
+  registry and authentication mechanism for forks is unchanged. This ADR
+  changes when forks publish, and stops release-please on forks.
 - [ADR-0006](0006-automate-releases-with-release-please.md): release-please
   automation (upstream).
 - How-to: [Reusing the workflows in a fork](../setup/reusing-in-a-fork.md)
 - How-to: [Publishing a fork to a private Azure Artifacts feed](../setup/publishing-to-azure-artifacts.md)
 - GitHub Actions — expressions and job status checks (`!cancelled()`, skipped
-  `needs` propagation, outputs of skipped jobs evaluating to empty):
+  `needs`, outputs of skipped jobs):
   https://docs.github.com/en/actions/reference/workflows-and-actions/expressions

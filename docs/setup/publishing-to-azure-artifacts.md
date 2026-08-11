@@ -15,7 +15,7 @@ workflow file needs to be edited.
 ## How it works
 
 On every push to your fork's `main` — typically a rebase onto upstream, see
-[Syncing and publishing](reusing-in-a-fork.md#syncing-and-publishing-rebase-to-publish)
+[Sync and publish](reusing-in-a-fork.md#sync-and-publish-rebase-to-publish)
 — the `publish` job runs (release-please itself runs only upstream, per
 [ADR-0012](../decisions/0012-fork-publishing-by-rebase.md)). The job skips
 cleanly when the current `package.json` version is already in your feed;
