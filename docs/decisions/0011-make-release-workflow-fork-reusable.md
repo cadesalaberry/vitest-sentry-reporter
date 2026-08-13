@@ -140,3 +140,7 @@ secrets and variables (no workflow edits required in a fork).
   https://docs.npmjs.com/cli/v10/configuring-npm/npmrc#auth-related-configuration
 - GitHub Actions — variables and secrets:
   https://docs.github.com/actions/learn-github-actions/variables
+- Amended by [ADR-0012](0012-fork-publishing-by-rebase.md): release-please now
+  runs only on the upstream repository, and forks publish idempotently on
+  every push to `main` ("rebase to publish") instead of on fork-local release
+  PRs.

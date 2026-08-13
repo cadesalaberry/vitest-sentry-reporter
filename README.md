@@ -276,7 +276,9 @@ npmjs.com, workflow permissions for release-please) is documented in
 The CI and release workflows are fork-safe and reusable without editing any
 workflow file: forks get working CI out of the box, and can publish to their
 own npm account or a private Azure Artifacts feed by injecting a secret and a
-few variables. See
+few variables. release-please runs only on the upstream repository — a fork
+publishes by rebasing its `main` onto upstream and force-pushing, which ships
+the current version to the fork's registry if it isn't there yet. See
 [docs/setup/reusing-in-a-fork.md](docs/setup/reusing-in-a-fork.md) for the
 configuration reference, and
 [docs/setup/publishing-to-azure-artifacts.md](docs/setup/publishing-to-azure-artifacts.md)
