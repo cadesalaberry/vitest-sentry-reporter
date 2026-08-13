@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.2](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.4.1...v1.4.2) (2026-08-13)
+
+
+### 👷 Continuous Integration
+
+* bump actions/setup-node from 6 to 7 ([#42](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/42)) ([3b721b5](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/3b721b527177537868f15a91af0fa71c499e9659))
+* **release:** 👷 run release-please only upstream and publish forks on push ([#45](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/45)) ([b4d57de](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/b4d57dea5776448476e9f1813bc3f7a17445637a))
+
 ## [1.4.1](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.4.0...v1.4.1) (2026-07-07)
 
 
