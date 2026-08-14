@@ -38,8 +38,8 @@ inside the job, referenced through an environment variable (never written to
 
 1. Open <https://github.com/cadesalaberry/vitest-sentry-reporter>.
 2. Select **Fork**, then create the fork under your account or organization.
-3. Clone your fork locally if you want to make the `package.json` change in
-   Step 5 from your machine (you can also edit it in the GitHub web UI).
+3. Clone your fork locally — you will need it to rebase onto upstream
+   (Step 6).
 
 ## Step 2 — Get your feed's npm registry URL
 
@@ -90,28 +90,7 @@ so your own account (or whichever account mints the PAT) needs this role.
 > Pass the **raw** PAT to GitHub. The workflow base64-encodes it for you (Azure
 > Artifacts requires the encoded form in `.npmrc`); do not pre-encode it.
 
-## Step 5 — Rename the package for your feed (recommended)
-
-To avoid clashing with the public `vitest-sentry-reporter` name — especially if
-your feed has an npmjs.com upstream source — scope the package to your
-organization. In your fork's `package.json`:
-
-```jsonc
-{
-  // e.g. @your-org/vitest-sentry-reporter
-  "name": "@<your-scope>/vitest-sentry-reporter",
-  // optional: point these at your fork
-  "repository": { "type": "git", "url": "git+https://github.com/<you>/vitest-sentry-reporter.git" },
-  "homepage": "https://github.com/<you>/vitest-sentry-reporter#readme"
-}
-```
-
-Commit this change to your fork's `main` (through a PR, so the PR-title check
-stays happy). Scoping also makes the `restricted` access level in
-Step 6 meaningful and lets consumers map the scope to your feed (see
-[Consuming the package](#consuming-the-package)).
-
-## Step 6 — Configure the fork's secret and variables
+## Step 5 — Configure the fork's secret and variables
 
 In your fork on GitHub, go to **Settings → Secrets and variables → Actions**.
 
@@ -125,9 +104,20 @@ Add these **variables** (the **Variables** tab → **New repository variable**):
 
 | Name | Value | Where it comes from |
 | --- | --- | --- |
+| `NPM_PACKAGE_NAME` | a name you own, e.g. `@<your-scope>/vitest-sentry-reporter` | your choice — see below |
 | `NPM_REGISTRY_URL` | your feed's npm `registry` URL | Step 2 |
 | `NPM_PUBLISH_ACCESS` | `restricted` | private feed → restricted |
 | `NPM_AUTH_STYLE` | *(only for Azure DevOps **Server**)* `password` | see note below |
+
+Set `NPM_PACKAGE_NAME` to avoid clashing with the public
+`vitest-sentry-reporter` name — especially if your feed has an npmjs.com
+upstream source. Scope it to your organization (e.g.
+`@your-org/vitest-sentry-reporter`); scoping also makes the `restricted`
+access level above meaningful and lets consumers map the scope to your feed
+(see [Consuming the package](#consuming-the-package)). Leaving it unset
+publishes under the repository name, `vitest-sentry-reporter` — either way,
+no `package.json` edit or commit is needed (see
+[ADR-0013](../decisions/0013-derive-published-package-name-from-repository.md)).
 
 What each name means is documented once in the
 [configuration reference](reusing-in-a-fork.md#configuration-reference).
@@ -136,7 +126,7 @@ Azure DevOps Server** hostname prevents auto-detection (`pkgs.dev.azure.com`
 and `*.pkgs.visualstudio.com` are recognized), and `NPM_PROVENANCE` should stay
 unset — provenance is an npmjs.org-only feature.
 
-## Step 7 — Sync and publish
+## Step 6 — Sync and publish
 
 Versioning happens upstream: release-please never runs on forks
 ([ADR-0012](../decisions/0012-fork-publishing-by-rebase.md)), so your fork
@@ -231,6 +221,7 @@ npm install @<your-scope>/vitest-sentry-reporter
 - GitHub Actions — variables and secrets: <https://docs.github.com/actions/learn-github-actions/variables>
 - [Reusing the workflows in a fork](reusing-in-a-fork.md)
 - [ADR-0011: Make the release workflow reusable by forks](../decisions/0011-make-release-workflow-fork-reusable.md)
+- [ADR-0013: Derive the published package name from the repository, not a commit](../decisions/0013-derive-published-package-name-from-repository.md)
 
 [azure-npmrc]: https://learn.microsoft.com/en-us/azure/devops/artifacts/npm/npmrc
 [pat-guidance]: https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate

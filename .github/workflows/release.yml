@@ -45,6 +45,12 @@ jobs:
   #     already has the package.json version, or if NPM_TOKEN is not set, the
   #     publish step stops without an error.
   #
+  # Package name. Always derived at publish time, never read as-is from the
+  # committed package.json: NPM_PACKAGE_NAME if set, else the repository name
+  # (GITHUB_REPOSITORY minus the owner). Applied via `npm pkg set` in the
+  # job's checkout only, so package.json in git never changes and a fork
+  # rebase has nothing to conflict on for the name. See ADR-0013.
+  #
   # Authentication. The NPM_TOKEN secret selects the path. Forks do not edit
   # this file:
   #   1. NPM_TOKEN not set (upstream): npm Trusted Publishing (OIDC) with
@@ -68,6 +74,12 @@ jobs:
   #                                Artifacts: a PAT with the Packaging
   #                                Read & write scope. Give the raw PAT; the
   #                                job encodes it in base64.
+  #   variable NPM_PACKAGE_NAME    The published package name. Default: the
+  #                                repository name (e.g.
+  #                                vitest-sentry-reporter). Set to a scoped
+  #                                name (e.g. @your-org/vitest-sentry-reporter)
+  #                                to avoid clashing with the upstream
+  #                                package. No package.json edit needed.
   #   variable NPM_REGISTRY_URL    The target registry. Default:
   #                                https://registry.npmjs.org. Azure example:
   #                                https://pkgs.dev.azure.com/ORG/PROJECT/_packaging/FEED/npm/registry/
@@ -120,13 +132,17 @@ jobs:
 
       # Trusted publishing (OIDC) requires npm >= 11.5.1. Node 20 ships npm
       # 10.x, and latest npm now requires Node >=22.22.2 to install, so this
-      # step needs Node >=22.22.2 (pinned above).
+      # step needs Node >=22.22.2 (pinned above). Only the upstream OIDC path
+      # needs the upgrade at all — a fork's token-based publish works fine on
+      # the npm bundled with Node — so forks skip this step entirely.
       - name: Upgrade npm for trusted publishing
+        if: github.repository == 'cadesalaberry/vitest-sentry-reporter'
         run: npm install -g npm@latest
 
       - name: Publish
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_PACKAGE_NAME: ${{ vars.NPM_PACKAGE_NAME }}
           NPM_REGISTRY_URL: ${{ vars.NPM_REGISTRY_URL }}
           NPM_PUBLISH_ACCESS: ${{ vars.NPM_PUBLISH_ACCESS }}
           NPM_AUTH_STYLE: ${{ vars.NPM_AUTH_STYLE }}
@@ -135,6 +151,14 @@ jobs:
         run: |
           set -euo pipefail
           access="${NPM_PUBLISH_ACCESS:-public}"
+
+          # The published name always comes from the repository, not from
+          # whatever is committed in package.json: NPM_PACKAGE_NAME if set,
+          # else the repository name. `npm pkg set` rewrites package.json in
+          # this job's checkout only, so a fork never needs a commit to
+          # rename the package before publishing (ADR-0013).
+          pkg_name="${NPM_PACKAGE_NAME:-${GITHUB_REPOSITORY##*/}}"
+          npm pkg set name="${pkg_name}"
 
           # A fork without an NPM_TOKEN cannot publish: the OIDC path operates
           # only for the upstream Trusted Publisher. Stop without an error, so
@@ -219,7 +243,6 @@ jobs:
           # requires authentication for reads). If the check fails (E404,
           # network), continue to the publish command, which shows the real
           # error.
-          pkg_name="$(node -p "require('./package.json').name")"
           pkg_version="$(node -p "require('./package.json').version")"
           pkg_spec="${pkg_name}@${pkg_version}"
           if npm view "${pkg_spec}" version --registry "${registry}" >/dev/null 2>&1; then
