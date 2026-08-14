@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.4](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.4.3...v1.4.4) (2026-08-14)
+
+
+### 👷 Continuous Integration
+
+* **release:** 👷 require NPM_PACKAGE_NAME instead of a package.json rename commit ([#50](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/50)) ([4be9cc5](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/4be9cc588ebbc77a730c93010b4dd838d27788b2))
+
 ## [1.4.3](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.4.2...v1.4.3) (2026-08-14)
 
 
