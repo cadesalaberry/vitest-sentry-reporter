@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.3](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.4.2...v1.4.3) (2026-08-14)
+
+
+### 🐛 Bug Fixes
+
+* **ci:** bump Node to 22 for npm@latest upgrade step ([#49](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/49)) ([4b661b1](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/4b661b1dd0bc714828f38955922003a0af6ad9fe))
+
 ## [1.4.2](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.4.1...v1.4.2) (2026-08-13)
 
 
