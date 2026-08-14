@@ -104,20 +104,22 @@ Add these **variables** (the **Variables** tab → **New repository variable**):
 
 | Name | Value | Where it comes from |
 | --- | --- | --- |
-| `NPM_PACKAGE_NAME` | a name you own, e.g. `@<your-scope>/vitest-sentry-reporter` | your choice — see below |
+| `NPM_PACKAGE_NAME` | **required** — a name you own, e.g. `@<your-scope>/vitest-sentry-reporter` | your choice — see below |
 | `NPM_REGISTRY_URL` | your feed's npm `registry` URL | Step 2 |
 | `NPM_PUBLISH_ACCESS` | `restricted` | private feed → restricted |
 | `NPM_AUTH_STYLE` | *(only for Azure DevOps **Server**)* `password` | see note below |
 
-Set `NPM_PACKAGE_NAME` to avoid clashing with the public
-`vitest-sentry-reporter` name — especially if your feed has an npmjs.com
-upstream source. Scope it to your organization (e.g.
-`@your-org/vitest-sentry-reporter`); scoping also makes the `restricted`
-access level above meaningful and lets consumers map the scope to your feed
-(see [Consuming the package](#consuming-the-package)). Leaving it unset
-publishes under the repository name, `vitest-sentry-reporter` — either way,
-no `package.json` edit or commit is needed (see
+`NPM_PACKAGE_NAME` has no default — the publish job fails with a clear
+message if it's unset, rather than guess (see
 [ADR-0013](../decisions/0013-derive-published-package-name-from-repository.md)).
+Scope it to your organization (e.g. `@your-org/vitest-sentry-reporter`) to
+avoid clashing with the public `vitest-sentry-reporter` name — especially if
+your feed has an npmjs.com upstream source. Scoping also makes the
+`restricted` access level above meaningful and lets consumers map the scope
+to your feed (see [Consuming the package](#consuming-the-package)). No
+`package.json` edit or commit is ever needed for this, or for the
+`repository`/`homepage`/`bugs` fields — the job derives those from the
+repository automatically.
 
 What each name means is documented once in the
 [configuration reference](reusing-in-a-fork.md#configuration-reference).
@@ -221,7 +223,7 @@ npm install @<your-scope>/vitest-sentry-reporter
 - GitHub Actions — variables and secrets: <https://docs.github.com/actions/learn-github-actions/variables>
 - [Reusing the workflows in a fork](reusing-in-a-fork.md)
 - [ADR-0011: Make the release workflow reusable by forks](../decisions/0011-make-release-workflow-fork-reusable.md)
-- [ADR-0013: Derive the published package name from the repository, not a commit](../decisions/0013-derive-published-package-name-from-repository.md)
+- [ADR-0013: Require published package identity as configuration, not a commit](../decisions/0013-derive-published-package-name-from-repository.md)
 
 [azure-npmrc]: https://learn.microsoft.com/en-us/azure/devops/artifacts/npm/npmrc
 [pat-guidance]: https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate
