@@ -3,6 +3,17 @@ import type * as Sentry from '@sentry/node';
 export type Primitive = string | number | boolean | null | undefined;
 
 /**
+ * Minimal Sentry user shape, used both for `scope.setUser` (which drives
+ * Sentry's "users affected" metric) and as the return type of automatic
+ * identity detection ({@link VitestSentryReporterOptions.identity}).
+ */
+export type SentryUser = {
+  id?: string;
+  email?: string;
+  username?: string;
+};
+
+/**
  * Configuration for the Sentry-enabled Vitest reporter.
  *
  * Defaults are chosen to make the reporter work out-of-the-box in CI when `SENTRY_DSN` is set.
@@ -59,11 +70,39 @@ export type VitestSentryReporterOptions = {
    */
   getFingerprint?: (ctx: FailureContext) => string[] | undefined;
   /**
-   * Associate a user with the event (useful for local runs).
+   * Associate a user with the event (useful for local runs). Takes precedence
+   * over automatic {@link identity} detection when both are set.
    */
-  getUser?: (
-    ctx: FailureContext,
-  ) => { id?: string; email?: string; username?: string } | undefined;
+  getUser?: (ctx: FailureContext) => SentryUser | undefined;
+  /**
+   * Auto-populate the Sentry user (which drives Sentry's "users affected"
+   * metric) with the developer who triggered the run, so failing tests can be
+   * attributed to and counted per developer. Also attaches a searchable
+   * `triggered_by` tag.
+   *
+   * Resolution is a priority-ordered fallback chain: the CI run's trigger-er
+   * (per provider), then the last commit's git author, then `git config
+   * user.*`, then the OS username. Automation bots and AI agents (detected via
+   * {@link detectActor}) are excluded so they never inflate the user count.
+   *
+   * Disabled by default. Set `true` to enable with defaults (username + id, no
+   * email, full fallback chain), or pass an object to tune it. `getUser` still
+   * wins when both are provided.
+   */
+  identity?:
+    | boolean
+    | {
+        /**
+         * Which signals to use: `'ci'` = the CI trigger-er only;
+         * `'commit-author'` = git author / config / OS user only; `'both'` =
+         * the full chain (default).
+         */
+        source?: 'ci' | 'commit-author' | 'both';
+        /** Include the email in the Sentry user. Email is PII; defaults to `false`. */
+        includeEmail?: boolean;
+        /** SHA-256 the id and email before sending, for PII-averse setups. Defaults to `false`. */
+        hash?: boolean;
+      };
   /**
    * Final event mutation hook, applied via scope event processor before sending.
    * Return the modified event or `null` to drop it.

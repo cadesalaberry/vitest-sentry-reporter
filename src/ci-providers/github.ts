@@ -3,6 +3,13 @@ import type { CIProvider } from './types.js';
 export const GitHubActionsProvider: CIProvider = {
   name: 'github',
   isActive: (env) => Boolean(env.GITHUB_ACTIONS),
+  // GITHUB_TRIGGERING_ACTOR is the account that initiated the run (including a
+  // re-run), which is exactly "who triggered this"; GITHUB_ACTOR is the wider
+  // fallback. GITHUB_ACTOR_ID is the numeric id of GITHUB_ACTOR.
+  triggeredBy: (env) => {
+    const username = env.GITHUB_TRIGGERING_ACTOR ?? env.GITHUB_ACTOR;
+    return username ? { username, id: env.GITHUB_ACTOR_ID } : undefined;
+  },
   repository: (env) => env.GITHUB_REPOSITORY,
   branch: (env) => env.GITHUB_REF_NAME,
   commitSha: (env) => env.GITHUB_SHA,

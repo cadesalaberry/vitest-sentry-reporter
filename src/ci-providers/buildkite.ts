@@ -3,6 +3,12 @@ import type { CIProvider } from './types.js';
 export const BuildkiteProvider: CIProvider = {
   name: 'buildkite',
   isActive: (env) => Boolean(env.BUILDKITE),
+  // BUILDKITE_BUILD_CREATOR is the person who created (triggered) the build.
+  triggeredBy: (env) => {
+    const username = env.BUILDKITE_BUILD_CREATOR;
+    const email = env.BUILDKITE_BUILD_CREATOR_EMAIL;
+    return username || email ? { username, email } : undefined;
+  },
   repository: (_env) => undefined,
   branch: (env) => env.BUILDKITE_BRANCH,
   commitSha: (env) => env.BUILDKITE_COMMIT,

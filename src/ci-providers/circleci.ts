@@ -3,6 +3,9 @@ import type { CIProvider } from './types.js';
 export const CircleCIProvider: CIProvider = {
   name: 'circleci',
   isActive: (env) => Boolean(env.CIRCLECI),
+  // CIRCLE_USERNAME is the VCS login of the user who triggered the pipeline.
+  triggeredBy: (env) =>
+    env.CIRCLE_USERNAME ? { username: env.CIRCLE_USERNAME } : undefined,
   repository: (env) => env.CIRCLE_PROJECT_REPONAME,
   branch: (env) => env.CIRCLE_BRANCH,
   commitSha: (env) => env.CIRCLE_SHA1,

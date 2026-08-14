@@ -51,6 +51,22 @@ describe('GitLabCIProvider', () => {
     expect(GitLabCIProvider.commitUrl(partial)).toBeUndefined();
   });
 
+  it('resolves the triggering user with login, id and email', () => {
+    expect(
+      GitLabCIProvider.triggeredBy({
+        ...env,
+        GITLAB_USER_LOGIN: 'alice',
+        GITLAB_USER_ID: '42',
+        GITLAB_USER_NAME: 'Alice A',
+        GITLAB_USER_EMAIL: 'alice@acme.test',
+      }),
+    ).toEqual({ username: 'alice', id: '42', email: 'alice@acme.test' });
+  });
+
+  it('has no triggering identity when GitLab exposes no user', () => {
+    expect(GitLabCIProvider.triggeredBy(env)).toBeUndefined();
+  });
+
   it('snapshots only its own environment keys', () => {
     expect(GitLabCIProvider.envSnapshot({ ...env, SECRET: 'x' })).toEqual(env);
   });

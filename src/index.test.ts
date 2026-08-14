@@ -4,6 +4,7 @@ import VitestSentryReporter, {
   ACTOR_NAME_ENV,
   ACTOR_TYPE_ENV,
   detectActor,
+  detectIdentity,
   detectTrigger,
   TRIGGER_ENV,
 } from './index.js';
@@ -21,5 +22,6 @@ describe('package entry point', () => {
     expect(TRIGGER_ENV).toBe('VITEST_SENTRY_TRIGGER');
     expect(typeof detectActor).toBe('function');
     expect(typeof detectTrigger).toBe('function');
+    expect(typeof detectIdentity).toBe('function');
   });
 });

@@ -9,9 +9,11 @@ import type {
 } from 'vitest/node';
 import { resolveCodeOwners } from './codeowners/index.js';
 import { makeDryRunTransport } from './dry-run-transport.js';
+import { detectIdentity, type IdentityOptions } from './identity.js';
 import type {
   FailureContext,
   Primitive,
+  SentryUser,
   VitestSentryReporterOptions,
   VitestUserConsoleLog,
 } from './types.js';
@@ -38,6 +40,10 @@ export class VitestSentryReporter implements Reporter {
   private maxEventsPerRun?: number;
   private codeownersEnabled: boolean;
   private codeownersRoot?: string;
+  private identityEnabled: boolean;
+  private identityOptions: IdentityOptions;
+  private identityResolved: boolean;
+  private identityUser?: SentryUser;
 
   constructor(options: VitestSentryReporterOptions = {}) {
     this.name = 'vitest-sentry-reporter';
@@ -58,6 +64,12 @@ export class VitestSentryReporter implements Reporter {
         ? co.root
         : repoRoot()
       : undefined;
+
+    const id = options.identity;
+    this.identityEnabled =
+      id === true || (typeof id === 'object' && id !== null);
+    this.identityOptions = typeof id === 'object' && id !== null ? id : {};
+    this.identityResolved = false;
   }
 
   onInit(): void {
@@ -134,10 +146,17 @@ export class VitestSentryReporter implements Reporter {
       owners.length > 0
         ? { code_owners: owners.join(','), code_owner: owners[0] }
         : {};
+    // Searchable counterpart to the Sentry user: who triggered the run.
+    const identityUser = this.resolveIdentity();
+    const triggeredBy = identityUser?.username ?? identityUser?.id;
+    const identityTags: Record<string, Primitive> = triggeredBy
+      ? { triggered_by: triggeredBy }
+      : {};
     const mergedTags = {
       ...manualTags,
       ...cleanRecord(baseTags(ctx)),
       ...cleanRecord(codeOwnerTags),
+      ...cleanRecord(identityTags),
     } as Record<string, Primitive>;
     // Detected trigger/actor markers yield to manually specified tags.
     for (const key of MANUALLY_OVERRIDABLE_TAGS) {
@@ -193,7 +212,8 @@ export class VitestSentryReporter implements Reporter {
       if (Object.keys(ci).length > 0) scope.setContext('ci', ci);
       scope.setFingerprint(fingerprint);
 
-      const user = this.options.getUser?.(ctx);
+      // getUser wins; otherwise fall back to the auto-detected identity.
+      const user = this.options.getUser?.(ctx) ?? identityUser;
       if (user) scope.setUser(user);
 
       if (this.options.beforeSend) {
@@ -276,6 +296,20 @@ export class VitestSentryReporter implements Reporter {
   private resolveOwners(ctx: FailureContext): string[] {
     if (!this.codeownersEnabled || !this.codeownersRoot) return [];
     return resolveCodeOwners(ctx.filePath, this.codeownersRoot);
+  }
+
+  /**
+   * The developer who triggered the run, or `undefined` when the `identity`
+   * option is off or nothing could be resolved. Detected once and cached, since
+   * the trigger-er is constant across a single run.
+   */
+  private resolveIdentity(): SentryUser | undefined {
+    if (!this.identityEnabled) return undefined;
+    if (!this.identityResolved) {
+      this.identityUser = detectIdentity(process.env, this.identityOptions);
+      this.identityResolved = true;
+    }
+    return this.identityUser;
   }
 }
 

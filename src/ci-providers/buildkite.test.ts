@@ -35,6 +35,17 @@ describe('BuildkiteProvider', () => {
     expect(BuildkiteProvider.commitUrl(env)).toBeUndefined();
   });
 
+  it('resolves the build creator name and email', () => {
+    expect(
+      BuildkiteProvider.triggeredBy({
+        ...env,
+        BUILDKITE_BUILD_CREATOR: 'Alice A',
+        BUILDKITE_BUILD_CREATOR_EMAIL: 'alice@acme.test',
+      }),
+    ).toEqual({ username: 'Alice A', email: 'alice@acme.test' });
+    expect(BuildkiteProvider.triggeredBy(env)).toBeUndefined();
+  });
+
   it('snapshots only its own environment keys', () => {
     expect(BuildkiteProvider.envSnapshot({ ...env, SECRET: 'x' })).toEqual(env);
   });

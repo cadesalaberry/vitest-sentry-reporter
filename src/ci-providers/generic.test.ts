@@ -15,6 +15,7 @@ describe('GenericCIProvider', () => {
     expect(GenericCIProvider.jobName(env)).toBeUndefined();
     expect(GenericCIProvider.commitUrl(env)).toBeUndefined();
     expect(GenericCIProvider.rootPath(env)).toBeUndefined();
+    expect(GenericCIProvider.triggeredBy(env)).toBeUndefined();
   });
 
   it('snapshots only the CI flag', () => {

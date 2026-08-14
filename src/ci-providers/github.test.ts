@@ -67,6 +67,24 @@ describe('GitHubActionsProvider', () => {
     ).toBeUndefined();
   });
 
+  it('resolves the triggering actor and its numeric id', () => {
+    expect(
+      GitHubActionsProvider.triggeredBy({
+        ...env,
+        GITHUB_TRIGGERING_ACTOR: 'alice',
+        GITHUB_ACTOR: 'bob',
+        GITHUB_ACTOR_ID: '42',
+      }),
+    ).toEqual({ username: 'alice', id: '42' });
+  });
+
+  it('falls back to GITHUB_ACTOR and has none without either', () => {
+    expect(
+      GitHubActionsProvider.triggeredBy({ ...env, GITHUB_ACTOR: 'bob' }),
+    ).toEqual({ username: 'bob' });
+    expect(GitHubActionsProvider.triggeredBy(env)).toBeUndefined();
+  });
+
   it('snapshots only its own environment keys', () => {
     expect(GitHubActionsProvider.envSnapshot({ ...env, SECRET: 'x' })).toEqual(
       env,

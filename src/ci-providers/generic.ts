@@ -3,6 +3,8 @@ import type { CIProvider } from './types.js';
 export const GenericCIProvider: CIProvider = {
   name: 'ci',
   isActive: (env) => Boolean(env.CI),
+  // A bare, unrecognized CI exposes no portable "who triggered" variable.
+  triggeredBy: (_env) => undefined,
   repository: (_env) => undefined,
   branch: (_env) => undefined,
   commitSha: (_env) => undefined,

@@ -80,6 +80,11 @@ export default defineConfig({
         // Associate a user to help spot who hit the failure locally
         getUser: () => ({ username: process.env.USER }),
 
+        // Auto-attribute each failure to the developer who triggered the run,
+        // so Sentry's "users affected" counts and ranks per developer.
+        // Off by default; `true` uses sensible defaults (see below).
+        identity: true,
+
         // Mutate the final Sentry event before it is sent
         beforeSend: (event, _hint, ctx) => {
           event.level = 'error';
@@ -107,7 +112,8 @@ Compatible with Vitest 3 and 4.
 ### What gets reported
 
 - **Error**: The thrown error from the failed test (or synthesized from message).
-- **Tags**: `test_file` (repo-relative path, see below), `test_name`, `test_full_title`, `test_project` (Vitest project/workspace name, handy for monorepos), `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `job_name` (CI job/step/shard name), `repository`, `branch`, `commit_sha`, `run_url` (link to the CI run/build, when detected), plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus any custom tags.
+- **Tags**: `test_file` (repo-relative path, see below), `test_name`, `test_full_title`, `test_project` (Vitest project/workspace name, handy for monorepos), `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `job_name` (CI job/step/shard name), `repository`, `branch`, `commit_sha`, `run_url` (link to the CI run/build, when detected), plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus `triggered_by` when identity detection is enabled, plus any custom tags.
+- **User**: when identity detection is enabled, the developer who triggered the run, which powers Sentry's "users affected" metric (see below).
 - **Extras**: `duration_ms`, `logs`, `suite_path`, `vitest_version`, minimal CI env snapshot.
 - **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky; in CI, a `ci` context with direct triage links — `pull_request_url`, `run_url`, `commit_url`, and `workflow_id` — for whichever the detected provider exposes. Sentry renders these URLs as clickable links, so the failing run, pull request and commit are one click from the issue.
 - **Fingerprint**: Defaults to `['vitest-failure', repoRelativeFile, testName]`; override with `getFingerprint`.
@@ -167,6 +173,45 @@ vitest run
 The same three tags can also be pinned from the reporter options (`tags` or
 `getTags`); manually specified values take precedence over the detected ones.
 
+### Who triggered the run (identity / "users affected")
+
+`actor_type`/`actor_name` tell you _what kind_ of actor ran the tests, but for a
+human they intentionally stop at `human` and drop the login. Enable the
+`identity` option to also attribute each failure to the specific developer who
+triggered the run, populating Sentry's **user** so its built-in "N users
+affected" metric counts and ranks how many developers a failing test impacts.
+
+The developer is resolved through a priority-ordered fallback chain:
+
+1. the **CI run's trigger-er**, per provider (GitHub `GITHUB_TRIGGERING_ACTOR`/`GITHUB_ACTOR`, GitLab `GITLAB_USER_*`, CircleCI `CIRCLE_USERNAME`, Buildkite `BUILDKITE_BUILD_CREATOR*`, Jenkins `CHANGE_AUTHOR*`/`BUILD_USER*`),
+2. the **last commit's git author**,
+3. **`git config user.name` / `user.email`** (local runs),
+4. the **OS username**.
+
+Automation bots and AI agents (the same ones detected for `actor_type`) are
+excluded, so they never inflate the user count. A searchable `triggered_by` tag
+is attached alongside the Sentry user. The feature is **off by default**:
+
+```ts
+new VitestSentryReporter({
+  // Defaults: username + numeric id, no email, full fallback chain.
+  identity: true,
+
+  // Or tune it:
+  // identity: {
+  //   source: 'both',      // 'ci' | 'commit-author' | 'both' (default)
+  //   includeEmail: false, // email is PII; opt in explicitly
+  //   hash: false,         // SHA-256 the id/email for PII-averse setups
+  // },
+});
+```
+
+`getUser` still takes precedence over the auto-detected user when both are set,
+and a manual `triggered_by` in `tags`/`getTags` overrides the detected one. The
+`detectIdentity` helper is exported if you want to reuse it. Note the trigger-er
+is "who started the run", which can differ from the commit author on re-runs,
+merges and scheduled jobs.
+
 ### Code ownership tags (CODEOWNERS)
 
 Route failures to the team that owns the failing file. When enabled, the
@@ -208,6 +253,7 @@ for the rationale.
 - `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` are respected when not explicitly set.
 - CI metadata auto-detected for GitHub Actions, CircleCI, Buildkite, GitLab, Jenkins.
 - `VITEST_SENTRY_TRIGGER`, `VITEST_SENTRY_ACTOR_TYPE`, `VITEST_SENTRY_ACTOR_NAME` manually pin the `trigger`/`actor_type`/`actor_name` tags.
+- The `identity` option reads the CI trigger-er variables listed above (GitHub/GitLab/CircleCI/Buildkite/Jenkins), falling back to git and the OS user.
 
 ### Multi-repo usage
 
