@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.4.4...v1.5.0) (2026-08-14)
+
+
+### ✨ Features
+
+* auto-attribute failures to the developer who triggered the run ([#53](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/53)) ([0d9a43c](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/0d9a43c5a37955557cfa15bb292e727b86235558))
+
 ## [1.4.4](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.4.3...v1.4.4) (2026-08-14)
 
 
