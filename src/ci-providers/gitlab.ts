@@ -3,6 +3,13 @@ import type { CIProvider } from './types.js';
 export const GitLabCIProvider: CIProvider = {
   name: 'gitlab',
   isActive: (env) => Boolean(env.GITLAB_CI),
+  // GitLab exposes the triggering user's login, id, display name and email.
+  triggeredBy: (env) => {
+    const username = env.GITLAB_USER_LOGIN ?? env.GITLAB_USER_NAME;
+    return username || env.GITLAB_USER_ID || env.GITLAB_USER_EMAIL
+      ? { username, id: env.GITLAB_USER_ID, email: env.GITLAB_USER_EMAIL }
+      : undefined;
+  },
   repository: (env) => env.CI_PROJECT_PATH,
   branch: (env) => env.CI_COMMIT_BRANCH,
   commitSha: (env) => env.CI_COMMIT_SHA,

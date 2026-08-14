@@ -38,6 +38,12 @@ const codeowners = vi.hoisted(() => ({
 }));
 vi.mock('./codeowners/index.js', () => codeowners);
 
+// Control automatic identity detection so it never shells out to git.
+const identity = vi.hoisted(() => ({
+  detectIdentity: vi.fn(() => undefined as unknown),
+}));
+vi.mock('./identity.js', () => identity);
+
 import { makeDryRunTransport } from './dry-run-transport.js';
 import VitestSentryReporter from './reporter.js';
 
@@ -101,6 +107,8 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     sentry.withScope.mockClear();
     codeowners.resolveCodeOwners.mockReset();
     codeowners.resolveCodeOwners.mockReturnValue([]);
+    identity.detectIdentity.mockReset();
+    identity.detectIdentity.mockReturnValue(undefined);
     // Default to "no CI provider" so detection stays quiet unless a test opts in.
     detectProviderMock.mockReset();
     detectProviderMock.mockReturnValue(undefined);
@@ -659,5 +667,140 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
       'InboundFilters',
       'ContextLines',
     ]);
+  });
+
+  it('does not detect identity unless the option is enabled', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    const reporter = new VitestSentryReporter({ dsn: DSN });
+
+    await reporter.onTestRunEnd(
+      [makeModule([makeTestCase({ id: 't1' })])],
+      [],
+      'failed',
+    );
+
+    expect(identity.detectIdentity).not.toHaveBeenCalled();
+    expect(scope.setUser).not.toHaveBeenCalled();
+    expect(scope.setTags.mock.calls[0][0]).not.toHaveProperty('triggered_by');
+  });
+
+  it('sets the Sentry user and triggered_by tag from the detected identity', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    identity.detectIdentity.mockReturnValue({ username: 'alice', id: '42' });
+    const reporter = new VitestSentryReporter({ dsn: DSN, identity: true });
+
+    await reporter.onTestRunEnd(
+      [makeModule([makeTestCase({ id: 't1' })])],
+      [],
+      'failed',
+    );
+
+    expect(identity.detectIdentity).toHaveBeenCalledWith(process.env, {});
+    expect(scope.setUser).toHaveBeenCalledWith({ username: 'alice', id: '42' });
+    expect(scope.setTags.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ triggered_by: 'alice' }),
+    );
+  });
+
+  it('passes identity options through to detection', async () => {
+    identity.detectIdentity.mockReturnValue({ username: 'alice' });
+    const reporter = new VitestSentryReporter({
+      dsn: DSN,
+      identity: { source: 'ci', includeEmail: true },
+    });
+
+    await reporter.onTestRunEnd(
+      [makeModule([makeTestCase({ id: 't1' })])],
+      [],
+      'failed',
+    );
+
+    expect(identity.detectIdentity).toHaveBeenCalledWith(process.env, {
+      source: 'ci',
+      includeEmail: true,
+    });
+  });
+
+  it('lets getUser take precedence over the detected identity for setUser', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    identity.detectIdentity.mockReturnValue({ username: 'alice' });
+    const reporter = new VitestSentryReporter({
+      dsn: DSN,
+      identity: true,
+      getUser: () => ({ id: 'explicit' }),
+    });
+
+    await reporter.onTestRunEnd(
+      [makeModule([makeTestCase({ id: 't1' })])],
+      [],
+      'failed',
+    );
+
+    // getUser wins for the user, but triggered_by still reflects the trigger-er.
+    expect(scope.setUser).toHaveBeenCalledWith({ id: 'explicit' });
+    expect(scope.setTags.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ triggered_by: 'alice' }),
+    );
+  });
+
+  it('omits the user and triggered_by tag when identity resolves nothing', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    identity.detectIdentity.mockReturnValue(undefined);
+    const reporter = new VitestSentryReporter({ dsn: DSN, identity: true });
+
+    await reporter.onTestRunEnd(
+      [makeModule([makeTestCase({ id: 't1' })])],
+      [],
+      'failed',
+    );
+
+    expect(scope.setUser).not.toHaveBeenCalled();
+    expect(scope.setTags.mock.calls[0][0]).not.toHaveProperty('triggered_by');
+  });
+
+  it('lets a manual tag override the detected triggered_by', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    identity.detectIdentity.mockReturnValue({ username: 'alice' });
+    const reporter = new VitestSentryReporter({
+      dsn: DSN,
+      identity: true,
+      tags: { triggered_by: 'release-bot' },
+    });
+
+    await reporter.onTestRunEnd(
+      [makeModule([makeTestCase({ id: 't1' })])],
+      [],
+      'failed',
+    );
+
+    expect(scope.setTags.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ triggered_by: 'release-bot' }),
+    );
+  });
+
+  it('detects identity once and reuses it across failures in a run', async () => {
+    identity.detectIdentity.mockReturnValue({ username: 'alice' });
+    const reporter = new VitestSentryReporter({ dsn: DSN, identity: true });
+    const cases = [1, 2, 3].map((n) => makeTestCase({ id: `t${n}` }));
+
+    await reporter.onTestRunEnd([makeModule(cases)], [], 'failed');
+
+    expect(sentry.captureException).toHaveBeenCalledTimes(3);
+    expect(identity.detectIdentity).toHaveBeenCalledTimes(1);
   });
 });

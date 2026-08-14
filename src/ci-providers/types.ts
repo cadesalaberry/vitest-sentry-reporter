@@ -1,6 +1,15 @@
+import type { SentryUser } from '../types.js';
+
 export interface CIProvider {
   readonly name: string;
   isActive(env: NodeJS.ProcessEnv): boolean;
+  /**
+   * The account that triggered this run (the run's actor/creator), or
+   * `undefined` when the CI system exposes none. Used to attribute a failing
+   * run to the developer it affects. Note this is "who started the run", which
+   * can differ from the commit author on re-runs, merges and scheduled jobs.
+   */
+  triggeredBy(env: NodeJS.ProcessEnv): SentryUser | undefined;
   repository(env: NodeJS.ProcessEnv): string | undefined;
   branch(env: NodeJS.ProcessEnv): string | undefined;
   commitSha(env: NodeJS.ProcessEnv): string | undefined;

@@ -3,6 +3,16 @@ import type { CIProvider } from './types.js';
 export const JenkinsProvider: CIProvider = {
   name: 'jenkins',
   isActive: (env) => Boolean(env.JENKINS_URL),
+  // On PR/MR builds the branch-source plugins expose the change author; the
+  // build-user-vars plugin exposes whoever started the build (BUILD_USER_*).
+  triggeredBy: (env) => {
+    const username = env.CHANGE_AUTHOR ?? env.BUILD_USER_ID;
+    const name = env.CHANGE_AUTHOR_DISPLAY_NAME ?? env.BUILD_USER;
+    const email = env.CHANGE_AUTHOR_EMAIL ?? env.BUILD_USER_EMAIL;
+    return username || name || email
+      ? { username: username ?? name, email }
+      : undefined;
+  },
   repository: (_env) => undefined,
   branch: (_env) => undefined,
   commitSha: (_env) => undefined,

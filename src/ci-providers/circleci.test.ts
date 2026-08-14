@@ -36,6 +36,13 @@ describe('CircleCIProvider', () => {
     expect(CircleCIProvider.commitUrl(env)).toBeUndefined();
   });
 
+  it('resolves the triggering username, none without it', () => {
+    expect(
+      CircleCIProvider.triggeredBy({ ...env, CIRCLE_USERNAME: 'alice' }),
+    ).toEqual({ username: 'alice' });
+    expect(CircleCIProvider.triggeredBy(env)).toBeUndefined();
+  });
+
   it('snapshots only its own environment keys', () => {
     expect(CircleCIProvider.envSnapshot({ ...env, SECRET: 'x' })).toEqual(env);
   });

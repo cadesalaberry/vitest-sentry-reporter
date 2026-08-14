@@ -34,6 +34,24 @@ describe('JenkinsProvider', () => {
     expect(JenkinsProvider.commitUrl(env)).toBeUndefined();
   });
 
+  it('resolves the PR change author, then the build user', () => {
+    expect(
+      JenkinsProvider.triggeredBy({
+        ...env,
+        CHANGE_AUTHOR: 'alice',
+        CHANGE_AUTHOR_EMAIL: 'alice@acme.test',
+      }),
+    ).toEqual({ username: 'alice', email: 'alice@acme.test' });
+    expect(
+      JenkinsProvider.triggeredBy({
+        ...env,
+        BUILD_USER_ID: 'bob',
+        BUILD_USER_EMAIL: 'bob@acme.test',
+      }),
+    ).toEqual({ username: 'bob', email: 'bob@acme.test' });
+    expect(JenkinsProvider.triggeredBy(env)).toBeUndefined();
+  });
+
   it('snapshots only its own environment keys', () => {
     expect(JenkinsProvider.envSnapshot({ ...env, SECRET: 'x' })).toEqual(env);
   });
