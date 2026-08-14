@@ -45,6 +45,14 @@ jobs:
   #     already has the package.json version, or if NPM_TOKEN is not set, the
   #     publish step stops without an error.
   #
+  # Package identity. NPM_PACKAGE_NAME is required for every repository that
+  # publishes (upstream too) — the job fails with a clear message if it is
+  # unset, rather than guessing a name. `repository`/`homepage`/`bugs.url`
+  # have no such choice to make, so they are always derived from
+  # GITHUB_REPOSITORY. All of it is applied via `npm pkg set` in the job's
+  # checkout only, so package.json in git never changes and a fork rebase has
+  # nothing to conflict on. See ADR-0013.
+  #
   # Authentication. The NPM_TOKEN secret selects the path. Forks do not edit
   # this file:
   #   1. NPM_TOKEN not set (upstream): npm Trusted Publishing (OIDC) with
@@ -68,6 +76,12 @@ jobs:
   #                                Artifacts: a PAT with the Packaging
   #                                Read & write scope. Give the raw PAT; the
   #                                job encodes it in base64.
+  #   variable NPM_PACKAGE_NAME    Required. The published package name (e.g.
+  #                                vitest-sentry-reporter, or a scoped
+  #                                @your-org/vitest-sentry-reporter to avoid
+  #                                clashing with the upstream package). The
+  #                                job fails if this is unset. No
+  #                                package.json edit needed.
   #   variable NPM_REGISTRY_URL    The target registry. Default:
   #                                https://registry.npmjs.org. Azure example:
   #                                https://pkgs.dev.azure.com/ORG/PROJECT/_packaging/FEED/npm/registry/
@@ -120,13 +134,17 @@ jobs:
 
       # Trusted publishing (OIDC) requires npm >= 11.5.1. Node 20 ships npm
       # 10.x, and latest npm now requires Node >=22.22.2 to install, so this
-      # step needs Node >=22.22.2 (pinned above).
+      # step needs Node >=22.22.2 (pinned above). Runs the same way for every
+      # repository — only the upstream OIDC path strictly needs it, but a
+      # single npm version for both publish paths is one less thing to reason
+      # about than a repository-based special case.
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@latest
 
       - name: Publish
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_PACKAGE_NAME: ${{ vars.NPM_PACKAGE_NAME }}
           NPM_REGISTRY_URL: ${{ vars.NPM_REGISTRY_URL }}
           NPM_PUBLISH_ACCESS: ${{ vars.NPM_PUBLISH_ACCESS }}
           NPM_AUTH_STYLE: ${{ vars.NPM_AUTH_STYLE }}
@@ -145,6 +163,27 @@ jobs:
             echo "registry, the NPM_REGISTRY_URL / NPM_PUBLISH_ACCESS variables)."
             exit 0
           fi
+
+          # From here on, a publish is actually attempted (upstream OIDC, or a
+          # fork with a token), so the package name must be explicit: no
+          # owner-based default, no guessing (ADR-0013).
+          pkg_name="${NPM_PACKAGE_NAME:-}"
+          if [ -z "${pkg_name}" ]; then
+            echo "NPM_PACKAGE_NAME is not set. Set it as a repository variable"
+            echo "(Settings -> Secrets and variables -> Actions -> Variables) to the"
+            echo "name to publish under, e.g. vitest-sentry-reporter or"
+            echo "@your-org/vitest-sentry-reporter."
+            exit 1
+          fi
+
+          # repository/homepage/bugs.url have no scoping choice to make —
+          # they unambiguously point at GITHUB_REPOSITORY — so, unlike the
+          # name, they need no variable: derive and set them here too.
+          npm pkg set name="${pkg_name}" \
+            repository.type=git \
+            repository.url="git+https://github.com/${GITHUB_REPOSITORY}.git" \
+            homepage="https://github.com/${GITHUB_REPOSITORY}#readme" \
+            bugs.url="https://github.com/${GITHUB_REPOSITORY}/issues"
 
           if [ -z "${NPM_TOKEN:-}" ]; then
             # Upstream default: npm Trusted Publishing (OIDC) to the public
@@ -219,7 +258,6 @@ jobs:
           # requires authentication for reads). If the check fails (E404,
           # network), continue to the publish command, which shows the real
           # error.
-          pkg_name="$(node -p "require('./package.json').name")"
           pkg_version="$(node -p "require('./package.json').version")"
           pkg_spec="${pkg_name}@${pkg_version}"
           if npm view "${pkg_spec}" version --registry "${registry}" >/dev/null 2>&1; then

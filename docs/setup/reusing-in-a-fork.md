@@ -5,12 +5,15 @@ or cause an unwanted operation. Codecov uploads use the fork's repository
 name and do not fail CI on a fork that has no `CODECOV_TOKEN`. Versions come
 only from upstream: the release-please job runs only on the upstream
 repository, not on forks. A fork publishes when you push to its `main`: the
-publish job sends the version in `package.json` to the registry that you
-configure. The job stops without an error when you set no publication secret,
-or when the registry already has that version. You do not edit workflow
-files. For the design decisions, see
-[ADR-0011](../decisions/0011-make-release-workflow-fork-reusable.md) and
-[ADR-0012](../decisions/0012-fork-publishing-by-rebase.md).
+publish job sends the package — under the name you set in
+`NPM_PACKAGE_NAME` (required once you publish) — at the version in
+`package.json`, to the registry that you configure. The job stops without an
+error when you set no publication secret, or when the registry already has
+that version. You do not edit workflow files, and you do not edit
+`package.json` either. For the design decisions, see
+[ADR-0011](../decisions/0011-make-release-workflow-fork-reusable.md),
+[ADR-0012](../decisions/0012-fork-publishing-by-rebase.md), and
+[ADR-0013](../decisions/0013-derive-published-package-name-from-repository.md).
 
 ## Configuration reference
 
@@ -22,6 +25,7 @@ the registry host.
 | Kind | Name | Purpose |
 |---|---|---|
 | Secret | `NPM_TOKEN` | An npm automation token, **or** — for Azure Artifacts — a Personal Access Token with the *Packaging: Read & write* scope. Give the **raw** PAT; the workflow encodes it in base64 as Azure requires. |
+| Variable | `NPM_PACKAGE_NAME` | **Required.** The published package name — e.g. a scoped `@your-org/vitest-sentry-reporter` to avoid clashing with the upstream package. No default: the job fails with a clear message if it's unset once a publish is attempted. No `package.json` edit or commit needed; see [ADR-0013](../decisions/0013-derive-published-package-name-from-repository.md). |
 | Variable | `NPM_REGISTRY_URL` | The target registry. Default: `https://registry.npmjs.org`. |
 | Variable | `NPM_PUBLISH_ACCESS` | `public` (default) or `restricted`. Use `restricted` for a private feed. |
 | Variable | `NPM_AUTH_STYLE` | `password` (Azure base64-PAT format) or `token` (bearer `_authToken`). The registry host sets the default; set the variable only for a self-hosted Azure DevOps Server URL. |
@@ -52,10 +56,12 @@ keep the branch selection on `main` — publication must run from your fork's
 
 ## Publish to your own npm account
 
-Set the `NPM_TOKEN` secret to an npm automation token. Keep the variables at
-their defaults (or set `NPM_PROVENANCE=true`). Change `name`, `repository`,
-and `homepage` in `package.json` to your fork before you publish, so that
-your package does not conflict with the upstream package name.
+Set the `NPM_TOKEN` secret to an npm automation token, and set
+`NPM_PACKAGE_NAME` to a name you own — required, with no default, since
+publishing under the plain repository name would collide with the upstream
+package on the public registry. Keep the other variables at their defaults
+(or set `NPM_PROVENANCE=true`). `repository`, `homepage`, and `bugs.url` need
+no configuration at all: the job points them at your fork automatically.
 
 ## Publish to a private Azure Artifacts feed
 
