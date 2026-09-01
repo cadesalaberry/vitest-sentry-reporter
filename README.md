@@ -28,7 +28,28 @@ bun add -D vitest-sentry-reporter @sentry/node
 
 ## Usage
 
-Add the reporter to your `vitest.config.ts`.
+Add the reporter to your `vitest.config.ts`. The reporter reads `SENTRY_DSN`
+from the environment, so the minimal setup needs no options.
+
+```ts
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+import VitestSentryReporter from 'vitest-sentry-reporter';
+
+export default defineConfig({
+  test: {
+    reporters: ['default', new VitestSentryReporter()],
+  },
+});
+```
+
+Compatible with Vitest 3 and 4.
+
+### All options
+
+Every option is optional. The example below shows all of them, each with its
+default value. Copy only the lines that you need. The sections below cover the
+larger options in detail.
 
 ```ts
 // vitest.config.ts
@@ -38,37 +59,54 @@ import VitestSentryReporter from 'vitest-sentry-reporter';
 export default defineConfig({
   test: {
     reporters: [
+      'default',
       new VitestSentryReporter({
-        // If omitted, uses process.env.SENTRY_DSN
-        // dsn: process.env.SENTRY_DSN,
+        // --- Connection and event metadata ---
 
-        // Enable/disable explicitly. Defaults to enabled if DSN exists.
-        // enabled: true,
+        // Sentry DSN. Default: process.env.SENTRY_DSN.
+        // Without a DSN the reporter turns itself off and warns once.
+        dsn: process.env.SENTRY_DSN,
 
-        // Optional metadata; will fall back to env and CI info if omitted
+        // Force the reporter on or off.
+        // Default: on when a DSN is available.
+        enabled: true,
+
+        // Event environment. Default: SENTRY_ENVIRONMENT, else 'ci' in CI,
+        // else NODE_ENV, else 'local'.
         environment: process.env.SENTRY_ENVIRONMENT || 'ci',
-        release: process.env.SENTRY_RELEASE, // defaults to commit SHA on popular CIs
-        serverName: 'local-dev',
+
+        // Release identifier, also sent as the Sentry `dist`.
+        // Default: SENTRY_RELEASE, else the commit SHA of the detected CI.
+        release: process.env.SENTRY_RELEASE,
+
+        // Any Sentry Node SDK option, merged into the Sentry.init() call.
+        // Default: {}. These values win over the ones above.
+        sentryOptions: {
+          debug: false,
+          serverName: 'local-dev',
+          sampleRate: 1,
+        },
+
+        // --- Tags, grouping and users ---
+
+        // Static tags attached to every failure. Values become strings.
+        // Default: {}.
         tags: {
           project: 'my-repo', // useful when used across multiple repos
           team: 'qa',
         },
 
-        // Sentry SDK options
-        sentryOptions: {
-          // debug: true,
-        },
-
-        // Filter which failures are reported
-        shouldReport: (ctx) => !ctx.flaky,
-
-        // Add or override tags dynamically per failure
+        // Dynamic tags per failure, merged after the static `tags`.
+        // Default: none.
         getTags: (ctx) => ({
-          spec: ctx.filePath,
+          spec: ctx.relativeFilePath,
           retry: String(ctx.retry ?? 0),
         }),
 
-        // Stable grouping across repos (this is also the default).
+        // Report only the failures that match. Default: report every failure.
+        shouldReport: (ctx) => !ctx.flaky,
+
+        // Sentry grouping key. The value below is also the default.
         // `relativeFilePath` is the repo-root-relative path, so a failure
         // groups the same way whether it ran locally or in CI.
         getFingerprint: (ctx) => [
@@ -77,37 +115,67 @@ export default defineConfig({
           ctx.testName,
         ],
 
-        // Associate a user to help spot who hit the failure locally
+        // Sentry user for the event, useful for local runs.
+        // Default: none. This function wins over `identity`.
         getUser: () => ({ username: process.env.USER }),
 
-        // Auto-attribute each failure to the developer who triggered the run,
-        // so Sentry's "users affected" counts and ranks per developer.
-        // Off by default; `true` uses sensible defaults (see below).
-        identity: true,
+        // Attribute each failure to the developer who triggered the run, so
+        // Sentry counts and ranks per developer. Default: false.
+        // `true` is the same as the object below.
+        identity: {
+          source: 'both', // 'ci' | 'commit-author' | 'both'
+          includeEmail: false, // email is PII, so opt in explicitly
+          hash: false, // SHA-256 the id and the email
+          pseudonymise: false, // send one opaque id, no name and no email
+        },
 
-        // Mutate the final Sentry event before it is sent
+        // Attach `code_owners` and `code_owner` tags from CODEOWNERS.
+        // Default: false. `true` is the same as { enabled: true }.
+        codeowners: {
+          enabled: true,
+          root: process.cwd(), // default: the CI checkout path, else cwd
+        },
+
+        // --- Final event shaping ---
+
+        // Last hook before the event leaves. Return null to drop the event.
+        // Default: none.
         beforeSend: (event, _hint, ctx) => {
           event.level = 'error';
           event.tags = { ...(event.tags || {}), quicklook: 'true' };
-          event.extra = { ...(event.extra || {}),
+          event.extra = {
+            ...(event.extra || {}),
             suite_path: ctx.suitePath,
             duration_ms: ctx.durationMs,
           };
           return event;
         },
 
-        // Safety valve in large suites
+        // --- Volume and safety ---
+
+        // Maximum number of events for one Vitest run. Default: no limit.
         maxEventsPerRun: 200,
 
-        // If true, logs what would be sent without sending to Sentry
-        // dryRun: true,
-      })
+        // Print the events instead of sending them. Default: false.
+        // It has no effect when `enabled` is false.
+        dryRun: false,
+
+        // --- Declared, but not attached to events yet ---
+
+        // For the hostname, use sentryOptions.serverName instead.
+        serverName: 'local-dev',
+        // To group events across repositories, use tags.project instead.
+        project: 'my-repo',
+      }),
     ],
   },
 });
 ```
 
-Compatible with Vitest 3 and 4.
+The `ctx` passed to `shouldReport`, `getTags`, `getFingerprint`, `getUser` and
+`beforeSend` is the failure context. It carries `testName`, `fullTitle`,
+`suitePath`, `filePath`, `relativeFilePath`, `message`, `stack`, `error`,
+`durationMs`, `retry`, `flaky`, `logs` and `meta`.
 
 ### What gets reported
 
@@ -199,9 +267,10 @@ new VitestSentryReporter({
 
   // Or tune it:
   // identity: {
-  //   source: 'both',      // 'ci' | 'commit-author' | 'both' (default)
-  //   includeEmail: false, // email is PII; opt in explicitly
-  //   hash: false,         // SHA-256 the id/email for PII-averse setups
+  //   source: 'both',       // 'ci' | 'commit-author' | 'both' (default)
+  //   includeEmail: false,  // email is PII; opt in explicitly
+  //   hash: false,          // SHA-256 the id/email for PII-averse setups
+  //   pseudonymise: false,  // one opaque id, no name and no email (see below)
   // },
 });
 ```
@@ -211,6 +280,37 @@ and a manual `triggered_by` in `tags`/`getTags` overrides the detected one. The
 `detectIdentity` helper is exported if you want to reuse it. Note the trigger-er
 is "who started the run", which can differ from the commit author on re-runs,
 merges and scheduled jobs.
+
+#### Count distinct developers without names (`pseudonymise`)
+
+Some teams want the count, but not the names. The `pseudonymise` option replaces
+the identity with one opaque id. The event then carries no name and no email:
+
+```ts
+new VitestSentryReporter({
+  identity: { pseudonymise: true },
+});
+```
+
+The Sentry user becomes `{ id: 'dev-e383094d4770a80f' }`, and the `triggered_by`
+tag carries the same value. Sentry counts one distinct user per developer, so
+"N users affected" still ranks a failing test by the number of developers that
+it blocks.
+
+The id has four properties:
+
+- **Stable**: one developer always gets the same id, so the count stays correct across runs.
+- **Opaque**: the id is the first 16 characters of a SHA-256 digest, with a `dev-` prefix.
+- **Seeded** by the most stable identifier available: the email, then the CI account id, then the username. The seed is lowercased and trimmed first.
+- **Reproducible**: a maintainer who knows the team emails can compute the same digests offline, and map an id back to a person without Sentry.
+
+`pseudonymise` takes precedence over `includeEmail` and `hash`. The id follows
+the seed, and the seed depends on the source. GitHub Actions exposes an account
+id and no email. The id from a GitHub Actions run therefore differs from the id
+of the same developer on a local run, which uses the git email. GitLab, Jenkins
+and Buildkite expose an email, so their ids match the local one. See
+[docs/decisions/0014-pseudonymise-identity-for-distinct-user-counts.md](docs/decisions/0014-pseudonymise-identity-for-distinct-user-counts.md)
+for the rationale.
 
 ### Code ownership tags (CODEOWNERS)
 
