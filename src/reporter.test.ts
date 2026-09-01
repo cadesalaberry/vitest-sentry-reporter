@@ -727,6 +727,32 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     });
   });
 
+  it('tags triggered_by with the pseudonymous id when there is no username', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    identity.detectIdentity.mockReturnValue({ id: 'dev-1a2b3c4d5e6f7a8b' });
+    const reporter = new VitestSentryReporter({
+      dsn: DSN,
+      identity: { pseudonymise: true },
+    });
+
+    await reporter.onTestRunEnd(
+      [makeModule([makeTestCase({ id: 't1' })])],
+      [],
+      'failed',
+    );
+
+    expect(identity.detectIdentity).toHaveBeenCalledWith(process.env, {
+      pseudonymise: true,
+    });
+    expect(scope.setUser).toHaveBeenCalledWith({ id: 'dev-1a2b3c4d5e6f7a8b' });
+    expect(scope.setTags.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ triggered_by: 'dev-1a2b3c4d5e6f7a8b' }),
+    );
+  });
+
   it('lets getUser take precedence over the detected identity for setUser', async () => {
     const scope = makeScope();
     sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>

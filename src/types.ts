@@ -86,8 +86,9 @@ export type VitestSentryReporterOptions = {
    * {@link detectActor}) are excluded so they never inflate the user count.
    *
    * Disabled by default. Set `true` to enable with defaults (username + id, no
-   * email, full fallback chain), or pass an object to tune it. `getUser` still
-   * wins when both are provided.
+   * email, full fallback chain), or pass an object to tune it. Set
+   * `pseudonymise` to count distinct developers without sending a name or an
+   * email. `getUser` still wins when both are provided.
    */
   identity?:
     | boolean
@@ -102,6 +103,13 @@ export type VitestSentryReporterOptions = {
         includeEmail?: boolean;
         /** SHA-256 the id and email before sending, for PII-averse setups. Defaults to `false`. */
         hash?: boolean;
+        /**
+         * Send a stable, opaque id instead of the name and the email. The id
+         * stays the same for the same developer across runs, so Sentry still
+         * counts distinct developers. Defaults to `false`. This option takes
+         * precedence over `includeEmail` and `hash`.
+         */
+        pseudonymise?: boolean;
       };
   /**
    * Final event mutation hook, applied via scope event processor before sending.

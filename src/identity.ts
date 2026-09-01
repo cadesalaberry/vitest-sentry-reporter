@@ -18,6 +18,13 @@ export type IdentityOptions = {
   includeEmail?: boolean;
   /** SHA-256 the id and email before returning them. Defaults to `false`. */
   hash?: boolean;
+  /**
+   * Replace the identity with a stable, opaque id and drop the name and the
+   * email. The id stays the same for the same developer across runs, so Sentry
+   * still counts distinct developers. Defaults to `false`. This option takes
+   * precedence over {@link includeEmail} and {@link hash}.
+   */
+  pseudonymise?: boolean;
 };
 
 /**
@@ -95,12 +102,14 @@ function git(env: NodeJS.ProcessEnv, args: string[]): string | undefined {
   }
 }
 
-/** Apply the email/hash options, then drop empty fields. */
+/** Apply the pseudonymise/email/hash options, then drop empty fields. */
 function finalizeUser(
   user: SentryUser | undefined,
   options: IdentityOptions,
 ): SentryUser | undefined {
   if (!user) return undefined;
+  // A pseudonym replaces the whole identity, so the other options do not apply.
+  if (options.pseudonymise) return pseudonymousUser(user);
   let { id, username, email } = user;
   if (!options.includeEmail) email = undefined;
   if (options.hash) {
@@ -110,6 +119,27 @@ function finalizeUser(
     email = email ? sha256(email) : email;
   }
   return cleanUser({ id, username, email });
+}
+
+/** Marks an id as a derived pseudonym and not a real account id. */
+const PSEUDONYM_PREFIX = 'dev-';
+/** Digest characters kept: 64 bits, which does not collide at team scale. */
+const PSEUDONYM_LENGTH = 16;
+
+/**
+ * One opaque id and nothing else, so Sentry can count distinct developers
+ * without a name or an email.
+ *
+ * The seed is the most stable identifier available: the email, then the CI
+ * account id, then the username. The seed is lowercased, so the same developer
+ * always gets the same pseudonym. The digest is reproducible: a maintainer who
+ * knows the team emails can map a pseudonym back to a person offline.
+ */
+function pseudonymousUser(user: SentryUser): SentryUser | undefined {
+  const seed = user.email ?? user.id ?? user.username;
+  if (!seed) return undefined;
+  const digest = sha256(seed.trim().toLowerCase()).slice(0, PSEUDONYM_LENGTH);
+  return { id: `${PSEUDONYM_PREFIX}${digest}` };
 }
 
 function sha256(value: string): string {

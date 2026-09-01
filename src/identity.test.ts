@@ -22,6 +22,7 @@ vi.mock('./ci-providers/index.js', () => ci);
 import { detectIdentity } from './identity.js';
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
+const pseudonym = (v: string) => `dev-${sha256(v).slice(0, 16)}`;
 
 /** Drive the mocked git so `git log` and `git config` return canned output. */
 function gitReturns(map: { log?: string; name?: string; email?: string }) {
@@ -122,6 +123,69 @@ describe('detectIdentity', () => {
       id: sha256('42'),
       email: sha256('alice@acme.test'),
     });
+  });
+
+  it('pseudonymises the identity into one opaque id', () => {
+    providerTriggeredBy({
+      username: 'alice',
+      id: '42',
+      email: 'alice@acme.test',
+    });
+    expect(detectIdentity({}, { pseudonymise: true })).toEqual({
+      id: pseudonym('alice@acme.test'),
+    });
+  });
+
+  it('seeds the pseudonym from the account id, then the username', () => {
+    providerTriggeredBy({ username: 'alice', id: '42' });
+    expect(detectIdentity({}, { pseudonymise: true })).toEqual({
+      id: pseudonym('42'),
+    });
+
+    providerTriggeredBy({ username: 'alice' });
+    expect(detectIdentity({}, { pseudonymise: true })).toEqual({
+      id: pseudonym('alice'),
+    });
+  });
+
+  it('gives the same pseudonym to the same developer, and only to them', () => {
+    providerTriggeredBy({ email: '  Alice@Acme.test ' });
+    const first = detectIdentity({}, { pseudonymise: true });
+
+    providerTriggeredBy({ email: 'alice@acme.test' });
+    expect(detectIdentity({}, { pseudonymise: true })).toEqual(first);
+
+    providerTriggeredBy({ email: 'bob@acme.test' });
+    expect(detectIdentity({}, { pseudonymise: true })).not.toEqual(first);
+  });
+
+  it('pseudonymises the git author, whose email is otherwise dropped', () => {
+    gitReturns({ log: 'Jane Dev\x1fjane@acme.test' });
+    expect(detectIdentity({}, { pseudonymise: true })).toEqual({
+      id: pseudonym('jane@acme.test'),
+    });
+  });
+
+  it('takes precedence over includeEmail and hash', () => {
+    providerTriggeredBy({
+      username: 'alice',
+      id: '42',
+      email: 'alice@acme.test',
+    });
+    expect(
+      detectIdentity(
+        {},
+        { pseudonymise: true, includeEmail: true, hash: true },
+      ),
+    ).toEqual({ id: pseudonym('alice@acme.test') });
+  });
+
+  it('returns nothing to pseudonymise when nothing resolves', () => {
+    gitReturns({ log: '', name: '', email: '' });
+    osMock.userInfo.mockImplementation(() => {
+      throw new Error('no mapped user');
+    });
+    expect(detectIdentity({}, { pseudonymise: true })).toBeUndefined();
   });
 
   it('returns undefined when git is absent and there is no OS user', () => {
