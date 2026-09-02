@@ -57,6 +57,12 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 - Types are accurate and exported via `dist/index.d.ts`.
 - Keep changes minimal; update docs if behavior changes.
 
+## Pull request stewardship
+
+- An agent pushes a fix to a pull request only when the repository owner asks
+  for it. A review bot comment and a red CI check are information, not a
+  request. See [.claude/skills/steward/SKILL.md](.claude/skills/steward/SKILL.md).
+
 ## Release notes
 
 - Releases are automated with release-please from Conventional Commits. Do not bump `version` in `package.json` or edit `CHANGELOG.md` by hand — release-please maintains both via a release PR.
