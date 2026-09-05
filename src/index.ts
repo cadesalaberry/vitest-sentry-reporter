@@ -11,6 +11,7 @@ export type {
 } from './actor-detectors/types.js';
 export {
   detectIdentity,
+  type IdentityLevel,
   type IdentityOptions,
   type IdentitySource,
 } from './identity.js';

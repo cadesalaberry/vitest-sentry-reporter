@@ -1,4 +1,5 @@
 import type * as Sentry from '@sentry/node';
+import type { IdentityLevel, IdentityOptions } from './identity.js';
 
 export type Primitive = string | number | boolean | null | undefined;
 
@@ -85,32 +86,22 @@ export type VitestSentryReporterOptions = {
    * user.*`, then the OS username. Automation bots and AI agents (detected via
    * {@link detectActor}) are excluded so they never inflate the user count.
    *
-   * Disabled by default. Set `true` to enable with defaults (username + id, no
-   * email, full fallback chain), or pass an object to tune it. Set
-   * `pseudonymise` to count distinct developers without sending a name or an
-   * email. `getUser` still wins when both are provided.
+   * On by default at the `'pseudonym'` level: Sentry receives one opaque
+   * `dev-<digest>` id, so the count of distinct developers works and no name
+   * and no email leave the machine. Raise the level to send more, or set
+   * `false` to send no user at all:
+   *
+   * ```ts
+   * identity: 'pseudonym'                  // default: dev-e383094d4770a80f
+   * identity: 'username'                   // adds the login and the CI id
+   * identity: 'email'                      // adds the email address
+   * identity: false                        // no user and no triggered_by tag
+   * identity: { level: 'email', source: 'ci' }
+   * ```
+   *
+   * `getUser` still wins when both are provided.
    */
-  identity?:
-    | boolean
-    | {
-        /**
-         * Which signals to use: `'ci'` = the CI trigger-er only;
-         * `'commit-author'` = git author / config / OS user only; `'both'` =
-         * the full chain (default).
-         */
-        source?: 'ci' | 'commit-author' | 'both';
-        /** Include the email in the Sentry user. Email is PII; defaults to `false`. */
-        includeEmail?: boolean;
-        /** SHA-256 the id and email before sending, for PII-averse setups. Defaults to `false`. */
-        hash?: boolean;
-        /**
-         * Send a stable, opaque id instead of the name and the email. The id
-         * stays the same for the same developer across runs, so Sentry still
-         * counts distinct developers. Defaults to `false`. This option takes
-         * precedence over `includeEmail` and `hash`.
-         */
-        pseudonymise?: boolean;
-      };
+  identity?: IdentityLevel | false | IdentityOptions;
   /**
    * Final event mutation hook, applied via scope event processor before sending.
    * Return the modified event or `null` to drop it.

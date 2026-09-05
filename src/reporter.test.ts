@@ -669,12 +669,12 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     ]);
   });
 
-  it('does not detect identity unless the option is enabled', async () => {
+  it('does not detect identity when identity is false', async () => {
     const scope = makeScope();
     sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
       cb(scope),
     );
-    const reporter = new VitestSentryReporter({ dsn: DSN });
+    const reporter = new VitestSentryReporter({ dsn: DSN, identity: false });
 
     await reporter.onTestRunEnd(
       [makeModule([makeTestCase({ id: 't1' })])],
@@ -687,13 +687,14 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     expect(scope.setTags.mock.calls[0][0]).not.toHaveProperty('triggered_by');
   });
 
-  it('sets the Sentry user and triggered_by tag from the detected identity', async () => {
-    const scope = makeScope();
-    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
-      cb(scope),
-    );
-    identity.detectIdentity.mockReturnValue({ username: 'alice', id: '42' });
-    const reporter = new VitestSentryReporter({ dsn: DSN, identity: true });
+  it('falls back to the default level for a stale identity: true', async () => {
+    identity.detectIdentity.mockReturnValue({ id: 'dev-1a2b3c4d5e6f7a8b' });
+    // `true` was the 1.5.0 spelling. The type rejects it now, and a JavaScript
+    // config that still carries it must never send more than a pseudonym.
+    const reporter = new VitestSentryReporter({
+      dsn: DSN,
+      identity: true,
+    } as unknown as ConstructorParameters<typeof VitestSentryReporter>[0]);
 
     await reporter.onTestRunEnd(
       [makeModule([makeTestCase({ id: 't1' })])],
@@ -702,6 +703,28 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     );
 
     expect(identity.detectIdentity).toHaveBeenCalledWith(process.env, {});
+  });
+
+  it('sets the Sentry user and triggered_by tag from the detected identity', async () => {
+    const scope = makeScope();
+    sentry.withScope.mockImplementationOnce((cb: (scope: unknown) => void) =>
+      cb(scope),
+    );
+    identity.detectIdentity.mockReturnValue({ username: 'alice', id: '42' });
+    const reporter = new VitestSentryReporter({
+      dsn: DSN,
+      identity: 'username',
+    });
+
+    await reporter.onTestRunEnd(
+      [makeModule([makeTestCase({ id: 't1' })])],
+      [],
+      'failed',
+    );
+
+    expect(identity.detectIdentity).toHaveBeenCalledWith(process.env, {
+      level: 'username',
+    });
     expect(scope.setUser).toHaveBeenCalledWith({ username: 'alice', id: '42' });
     expect(scope.setTags.mock.calls[0][0]).toEqual(
       expect.objectContaining({ triggered_by: 'alice' }),
@@ -712,7 +735,7 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     identity.detectIdentity.mockReturnValue({ username: 'alice' });
     const reporter = new VitestSentryReporter({
       dsn: DSN,
-      identity: { source: 'ci', includeEmail: true },
+      identity: { source: 'ci', level: 'email' },
     });
 
     await reporter.onTestRunEnd(
@@ -723,7 +746,7 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
 
     expect(identity.detectIdentity).toHaveBeenCalledWith(process.env, {
       source: 'ci',
-      includeEmail: true,
+      level: 'email',
     });
   });
 
@@ -733,10 +756,8 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
       cb(scope),
     );
     identity.detectIdentity.mockReturnValue({ id: 'dev-1a2b3c4d5e6f7a8b' });
-    const reporter = new VitestSentryReporter({
-      dsn: DSN,
-      identity: { pseudonymise: true },
-    });
+    // No identity option at all: the default level is the pseudonym.
+    const reporter = new VitestSentryReporter({ dsn: DSN });
 
     await reporter.onTestRunEnd(
       [makeModule([makeTestCase({ id: 't1' })])],
@@ -744,9 +765,7 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
       'failed',
     );
 
-    expect(identity.detectIdentity).toHaveBeenCalledWith(process.env, {
-      pseudonymise: true,
-    });
+    expect(identity.detectIdentity).toHaveBeenCalledWith(process.env, {});
     expect(scope.setUser).toHaveBeenCalledWith({ id: 'dev-1a2b3c4d5e6f7a8b' });
     expect(scope.setTags.mock.calls[0][0]).toEqual(
       expect.objectContaining({ triggered_by: 'dev-1a2b3c4d5e6f7a8b' }),
@@ -761,7 +780,7 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     identity.detectIdentity.mockReturnValue({ username: 'alice' });
     const reporter = new VitestSentryReporter({
       dsn: DSN,
-      identity: true,
+      identity: 'username',
       getUser: () => ({ id: 'explicit' }),
     });
 
@@ -784,7 +803,10 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
       cb(scope),
     );
     identity.detectIdentity.mockReturnValue(undefined);
-    const reporter = new VitestSentryReporter({ dsn: DSN, identity: true });
+    const reporter = new VitestSentryReporter({
+      dsn: DSN,
+      identity: 'username',
+    });
 
     await reporter.onTestRunEnd(
       [makeModule([makeTestCase({ id: 't1' })])],
@@ -804,7 +826,7 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     identity.detectIdentity.mockReturnValue({ username: 'alice' });
     const reporter = new VitestSentryReporter({
       dsn: DSN,
-      identity: true,
+      identity: 'username',
       tags: { triggered_by: 'release-bot' },
     });
 
@@ -821,7 +843,10 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
 
   it('detects identity once and reuses it across failures in a run', async () => {
     identity.detectIdentity.mockReturnValue({ username: 'alice' });
-    const reporter = new VitestSentryReporter({ dsn: DSN, identity: true });
+    const reporter = new VitestSentryReporter({
+      dsn: DSN,
+      identity: 'username',
+    });
     const cases = [1, 2, 3].map((n) => makeTestCase({ id: `t${n}` }));
 
     await reporter.onTestRunEnd([makeModule(cases)], [], 'failed');

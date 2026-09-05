@@ -8,23 +8,30 @@ import type { SentryUser } from './types.js';
 /** Which signals {@link detectIdentity} may use. */
 export type IdentitySource = 'ci' | 'commit-author' | 'both';
 
+/**
+ * How much of the identity reaches Sentry, from the least to the most
+ * identifying:
+ *
+ * - `'pseudonym'`: one opaque `dev-<digest>` id. No name and no email.
+ * - `'username'`: the login or the display name, plus the CI account id.
+ * - `'email'`: the username, the id and the email address.
+ *
+ * Each level adds to the level before it. Only `'email'` sends direct personal
+ * data, so a team opts in to it on purpose.
+ */
+export type IdentityLevel = 'pseudonym' | 'username' | 'email';
+
+/** The level that applies when the caller sets none. */
+const DEFAULT_LEVEL: IdentityLevel = 'pseudonym';
+
 export type IdentityOptions = {
+  /** How much detail to send. Defaults to `'pseudonym'`. */
+  level?: IdentityLevel;
   /**
    * `'ci'` = the CI trigger-er only; `'commit-author'` = git author / config /
    * OS user only; `'both'` = the full chain (default).
    */
   source?: IdentitySource;
-  /** Include the email in the returned user. Email is PII; defaults to `false`. */
-  includeEmail?: boolean;
-  /** SHA-256 the id and email before returning them. Defaults to `false`. */
-  hash?: boolean;
-  /**
-   * Replace the identity with a stable, opaque id and drop the name and the
-   * email. The id stays the same for the same developer across runs, so Sentry
-   * still counts distinct developers. Defaults to `false`. This option takes
-   * precedence over {@link includeEmail} and {@link hash}.
-   */
-  pseudonymise?: boolean;
 };
 
 /**
@@ -39,6 +46,9 @@ export type IdentityOptions = {
  *
  * Automation bots and AI agents are excluded up front so they never inflate the
  * developer count. Returns `undefined` when nothing usable can be resolved.
+ *
+ * The result carries only what {@link IdentityOptions.level} allows. The default
+ * level is `'pseudonym'`, so no name and no email leave the machine.
  */
 export function detectIdentity(
   env: NodeJS.ProcessEnv = process.env,
@@ -54,7 +64,7 @@ export function detectIdentity(
     raw = gitAuthor(env) ?? gitConfigUser() ?? osUser();
   }
 
-  return finalizeUser(raw, options);
+  return finalizeUser(raw, options.level ?? DEFAULT_LEVEL);
 }
 
 function triggeredByCI(env: NodeJS.ProcessEnv): SentryUser | undefined {
@@ -102,23 +112,20 @@ function git(env: NodeJS.ProcessEnv, args: string[]): string | undefined {
   }
 }
 
-/** Apply the pseudonymise/email/hash options, then drop empty fields. */
+/** Keep the fields that the level allows, then drop the empty ones. */
 function finalizeUser(
   user: SentryUser | undefined,
-  options: IdentityOptions,
+  level: IdentityLevel,
 ): SentryUser | undefined {
   if (!user) return undefined;
-  // A pseudonym replaces the whole identity, so the other options do not apply.
-  if (options.pseudonymise) return pseudonymousUser(user);
-  let { id, username, email } = user;
-  if (!options.includeEmail) email = undefined;
-  if (options.hash) {
-    // Hash the identifying id/email; the username stays readable, as it is the
-    // searchable handle and not sensitive on its own.
-    id = id ? sha256(id) : id;
-    email = email ? sha256(email) : email;
-  }
-  return cleanUser({ id, username, email });
+  // A pseudonym replaces the whole identity, so no other field survives.
+  if (level === 'pseudonym') return pseudonymousUser(user);
+  const { id, username, email } = user;
+  return cleanUser({
+    id,
+    username,
+    email: level === 'email' ? email : undefined,
+  });
 }
 
 /** Marks an id as a derived pseudonym and not a real account id. */

@@ -68,15 +68,20 @@ describe('detectIdentity', () => {
     providerTriggeredBy({ username: 'alice', id: '42' });
     gitReturns({ log: 'Jane Dev\x1fjane@acme.test' });
 
-    expect(detectIdentity({})).toEqual({ username: 'alice', id: '42' });
+    expect(detectIdentity({}, { level: 'username' })).toEqual({
+      username: 'alice',
+      id: '42',
+    });
     expect(cp.execFileSync).not.toHaveBeenCalled();
   });
 
-  it('falls back to the git author when no CI trigger-er, honoring includeEmail', () => {
+  it('falls back to the git author when no CI trigger-er, honoring the level', () => {
     gitReturns({ log: 'Jane Dev\x1fjane@acme.test' });
 
-    expect(detectIdentity({})).toEqual({ username: 'Jane Dev' });
-    expect(detectIdentity({}, { includeEmail: true })).toEqual({
+    expect(detectIdentity({}, { level: 'username' })).toEqual({
+      username: 'Jane Dev',
+    });
+    expect(detectIdentity({}, { level: 'email' })).toEqual({
       username: 'Jane Dev',
       email: 'jane@acme.test',
     });
@@ -84,18 +89,24 @@ describe('detectIdentity', () => {
 
   it('falls back to git config when there is no commit', () => {
     gitReturns({ log: '', name: 'cfg-user', email: 'cfg@acme.test' });
-    expect(detectIdentity({})).toEqual({ username: 'cfg-user' });
+    expect(detectIdentity({}, { level: 'username' })).toEqual({
+      username: 'cfg-user',
+    });
   });
 
   it('falls back to the OS username as a last resort', () => {
     gitReturns({ log: '', name: '', email: '' });
-    expect(detectIdentity({})).toEqual({ username: 'os-user' });
+    expect(detectIdentity({}, { level: 'username' })).toEqual({
+      username: 'os-user',
+    });
   });
 
   it('ignores an empty provider identity and continues down the chain', () => {
     providerTriggeredBy({ username: '' });
     gitReturns({ log: 'Jane Dev\x1fjane@acme.test' });
-    expect(detectIdentity({})).toEqual({ username: 'Jane Dev' });
+    expect(detectIdentity({}, { level: 'username' })).toEqual({
+      username: 'Jane Dev',
+    });
   });
 
   it("source 'ci' uses only the trigger-er and never touches git", () => {
@@ -107,77 +118,74 @@ describe('detectIdentity', () => {
   it("source 'commit-author' ignores the CI trigger-er", () => {
     providerTriggeredBy({ username: 'alice' });
     gitReturns({ log: 'Jane Dev\x1fjane@acme.test' });
-    expect(detectIdentity({}, { source: 'commit-author' })).toEqual({
-      username: 'Jane Dev',
-    });
+    expect(
+      detectIdentity({}, { source: 'commit-author', level: 'username' }),
+    ).toEqual({ username: 'Jane Dev' });
   });
 
-  it('hashes the id and email but leaves the username readable', () => {
+  it('pseudonymises by default, with no name and no email', () => {
     providerTriggeredBy({
       username: 'alice',
       id: '42',
       email: 'alice@acme.test',
     });
-    expect(detectIdentity({}, { includeEmail: true, hash: true })).toEqual({
-      username: 'alice',
-      id: sha256('42'),
-      email: sha256('alice@acme.test'),
-    });
-  });
-
-  it('pseudonymises the identity into one opaque id', () => {
-    providerTriggeredBy({
-      username: 'alice',
-      id: '42',
-      email: 'alice@acme.test',
-    });
-    expect(detectIdentity({}, { pseudonymise: true })).toEqual({
+    expect(detectIdentity({})).toEqual({ id: pseudonym('alice@acme.test') });
+    expect(detectIdentity({}, { source: 'both' })).toEqual({
       id: pseudonym('alice@acme.test'),
+    });
+  });
+
+  it("level 'email' sends the id, the username and the email", () => {
+    providerTriggeredBy({
+      username: 'alice',
+      id: '42',
+      email: 'alice@acme.test',
+    });
+    expect(detectIdentity({}, { level: 'email' })).toEqual({
+      username: 'alice',
+      id: '42',
+      email: 'alice@acme.test',
+    });
+  });
+
+  it("level 'username' drops the email and keeps the readable handle", () => {
+    providerTriggeredBy({
+      username: 'alice',
+      id: '42',
+      email: 'alice@acme.test',
+    });
+    expect(detectIdentity({}, { level: 'username' })).toEqual({
+      username: 'alice',
+      id: '42',
     });
   });
 
   it('seeds the pseudonym from the account id, then the username', () => {
     providerTriggeredBy({ username: 'alice', id: '42' });
-    expect(detectIdentity({}, { pseudonymise: true })).toEqual({
+    expect(detectIdentity({}, { level: 'pseudonym' })).toEqual({
       id: pseudonym('42'),
     });
 
     providerTriggeredBy({ username: 'alice' });
-    expect(detectIdentity({}, { pseudonymise: true })).toEqual({
+    expect(detectIdentity({}, { level: 'pseudonym' })).toEqual({
       id: pseudonym('alice'),
     });
   });
 
   it('gives the same pseudonym to the same developer, and only to them', () => {
     providerTriggeredBy({ email: '  Alice@Acme.test ' });
-    const first = detectIdentity({}, { pseudonymise: true });
+    const first = detectIdentity({});
 
     providerTriggeredBy({ email: 'alice@acme.test' });
-    expect(detectIdentity({}, { pseudonymise: true })).toEqual(first);
+    expect(detectIdentity({})).toEqual(first);
 
     providerTriggeredBy({ email: 'bob@acme.test' });
-    expect(detectIdentity({}, { pseudonymise: true })).not.toEqual(first);
+    expect(detectIdentity({})).not.toEqual(first);
   });
 
   it('pseudonymises the git author, whose email is otherwise dropped', () => {
     gitReturns({ log: 'Jane Dev\x1fjane@acme.test' });
-    expect(detectIdentity({}, { pseudonymise: true })).toEqual({
-      id: pseudonym('jane@acme.test'),
-    });
-  });
-
-  it('takes precedence over includeEmail and hash', () => {
-    providerTriggeredBy({
-      username: 'alice',
-      id: '42',
-      email: 'alice@acme.test',
-    });
-    expect(
-      detectIdentity(
-        {},
-        { pseudonymise: true, includeEmail: true, hash: true },
-      ),
-    ).toEqual({ id: pseudonym('alice@acme.test') });
+    expect(detectIdentity({})).toEqual({ id: pseudonym('jane@acme.test') });
   });
 
   it('returns nothing to pseudonymise when nothing resolves', () => {
@@ -185,7 +193,7 @@ describe('detectIdentity', () => {
     osMock.userInfo.mockImplementation(() => {
       throw new Error('no mapped user');
     });
-    expect(detectIdentity({}, { pseudonymise: true })).toBeUndefined();
+    expect(detectIdentity({})).toBeUndefined();
   });
 
   it('returns undefined when git is absent and there is no OS user', () => {

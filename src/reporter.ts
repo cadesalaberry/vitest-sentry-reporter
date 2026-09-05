@@ -65,10 +65,17 @@ export class VitestSentryReporter implements Reporter {
         : repoRoot()
       : undefined;
 
+    // Identity is on by default at the safest level. Any value that the type
+    // does not allow (for example a stale `identity: true`) falls back to that
+    // default, so an unexpected value never sends more than a pseudonym.
     const id = options.identity;
-    this.identityEnabled =
-      id === true || (typeof id === 'object' && id !== null);
-    this.identityOptions = typeof id === 'object' && id !== null ? id : {};
+    this.identityEnabled = id !== false;
+    this.identityOptions =
+      typeof id === 'string'
+        ? { level: id }
+        : typeof id === 'object' && id !== null
+          ? id
+          : {};
     this.identityResolved = false;
   }
 
@@ -299,9 +306,9 @@ export class VitestSentryReporter implements Reporter {
   }
 
   /**
-   * The developer who triggered the run, or `undefined` when the `identity`
-   * option is off or nothing could be resolved. Detected once and cached, since
-   * the trigger-er is constant across a single run.
+   * The developer who triggered the run, or `undefined` when `identity` is
+   * `false` or nothing could be resolved. Detected once and cached, since the
+   * trigger-er is constant across a single run.
    */
   private resolveIdentity(): SentryUser | undefined {
     if (!this.identityEnabled) return undefined;
