@@ -69,7 +69,7 @@
     "@vitest/coverage-v8": "^4.0.13",
     "lefthook": "^2.1.9",
     "typescript": "^7.0.2",
-    "vitest": "^4.0.13"
+    "vitest": "^5.0.0"
   },
   "dependencies": {
     "ignore": "^7.0.5"
