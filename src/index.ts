@@ -10,10 +10,9 @@ export type {
   ActorType,
 } from './actor-detectors/types.js';
 export {
-  detectIdentity,
-  type IdentityLevel,
-  type IdentityOptions,
-  type IdentitySource,
+  type DetectedIdentities,
+  type DetectedIdentity,
+  detectIdentities,
 } from './identity.js';
 export { default } from './reporter.js';
 export type { SentryUser } from './types.js';

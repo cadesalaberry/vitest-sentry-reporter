@@ -1,12 +1,12 @@
 import type * as Sentry from '@sentry/node';
-import type { IdentityLevel, IdentityOptions } from './identity.js';
+import type { DetectedIdentities } from './identity.js';
 
 export type Primitive = string | number | boolean | null | undefined;
 
 /**
  * Minimal Sentry user shape, used both for `scope.setUser` (which drives
- * Sentry's "users affected" metric) and as the return type of automatic
- * identity detection ({@link VitestSentryReporterOptions.identity}).
+ * Sentry's "users affected" metric) and as the return type of the `identify`
+ * and `getUser` callbacks ({@link VitestSentryReporterOptions.identify}).
  */
 export type SentryUser = {
   id?: string;
@@ -72,36 +72,35 @@ export type VitestSentryReporterOptions = {
   getFingerprint?: (ctx: FailureContext) => string[] | undefined;
   /**
    * Associate a user with the event (useful for local runs). Takes precedence
-   * over automatic {@link identity} detection when both are set.
+   * over {@link identify} when both are set.
    */
   getUser?: (ctx: FailureContext) => SentryUser | undefined;
   /**
-   * Auto-populate the Sentry user (which drives Sentry's "users affected"
-   * metric) with the developer who triggered the run, so failing tests can be
-   * attributed to and counted per developer. Also attaches a searchable
-   * `triggered_by` tag.
+   * Pick the Sentry user for the run from the developers that the reporter
+   * detects. The Sentry user drives Sentry's "users affected" metric, so
+   * Sentry ranks each failed test by the number of developers that it blocks.
+   * A searchable `triggered_by` tag carries the username, else the id.
    *
-   * Resolution is a priority-ordered fallback chain: the CI run's trigger-er
-   * (per provider), then the last commit's git author, then `git config
-   * user.*`, then the OS username. Automation bots and AI agents (detected via
-   * {@link detectActor}) are excluded so they never inflate the user count.
+   * The reporter calls the function once per run with two candidates: `ci`
+   * (who triggered the CI run) and `commitAuthor` (the author of the last
+   * commit, else `git config user.*`, else the OS user). Each candidate has an
+   * `id`, which is always an opaque pseudonym, plus the `username` and the
+   * `email` when the source exposes them. Automation bots and AI agents
+   * (detected via {@link detectActor}) are excluded, so both candidates are
+   * absent for them.
    *
-   * On by default at the `'pseudonym'` level: Sentry receives one opaque
-   * `dev-<digest>` id, so the count of distinct developers works and no name
-   * and no email leave the machine. Raise the level to send more, or set
-   * `false` to send no user at all:
+   * The default sends the pseudonym of the commit author and nothing else:
    *
    * ```ts
-   * identity: 'pseudonym'                  // default: dev-e383094d4770a80f
-   * identity: 'username'                   // adds the login and the CI id
-   * identity: 'email'                      // adds the email address
-   * identity: false                        // no user and no triggered_by tag
-   * identity: { level: 'email', source: 'ci' }
+   * identify: ({ commitAuthor }) => commitAuthor && { id: commitAuthor.id }
    * ```
    *
+   * Return more fields to send more. The username and the email are personal
+   * data. Return `undefined` to send no user, or set `false` to skip the
+   * detection. A function that throws sends no user and logs one warning.
    * `getUser` still wins when both are provided.
    */
-  identity?: IdentityLevel | false | IdentityOptions;
+  identify?: ((detected: DetectedIdentities) => SentryUser | undefined) | false;
   /**
    * Final event mutation hook, applied via scope event processor before sending.
    * Return the modified event or `null` to drop it.

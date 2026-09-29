@@ -9,7 +9,7 @@ import type {
 } from 'vitest/node';
 import { resolveCodeOwners } from './codeowners/index.js';
 import { makeDryRunTransport } from './dry-run-transport.js';
-import { detectIdentity, type IdentityOptions } from './identity.js';
+import { type DetectedIdentities, detectIdentities } from './identity.js';
 import type {
   FailureContext,
   Primitive,
@@ -29,6 +29,13 @@ import {
   toFailureContext,
 } from './utils.js';
 
+/** The default `identify`: the commit author's pseudonym and nothing else. */
+function defaultIdentify({
+  commitAuthor,
+}: DetectedIdentities): SentryUser | undefined {
+  return commitAuthor ? { id: commitAuthor.id } : undefined;
+}
+
 export class VitestSentryReporter implements Reporter {
   public name: string;
   private options: VitestSentryReporterOptions;
@@ -40,8 +47,7 @@ export class VitestSentryReporter implements Reporter {
   private maxEventsPerRun?: number;
   private codeownersEnabled: boolean;
   private codeownersRoot?: string;
-  private identityEnabled: boolean;
-  private identityOptions: IdentityOptions;
+  private identify?: (detected: DetectedIdentities) => SentryUser | undefined;
   private identityResolved: boolean;
   private identityUser?: SentryUser;
 
@@ -65,17 +71,16 @@ export class VitestSentryReporter implements Reporter {
         : repoRoot()
       : undefined;
 
-    // Identity is on by default at the safest level. Any value that the type
-    // does not allow (for example a stale `identity: true`) falls back to that
-    // default, so an unexpected value never sends more than a pseudonym.
-    const id = options.identity;
-    this.identityEnabled = id !== false;
-    this.identityOptions =
-      typeof id === 'string'
-        ? { level: id }
-        : typeof id === 'object' && id !== null
-          ? id
-          : {};
+    // `false` turns identity off. Any other value that is not a function falls
+    // back to the default, so an unexpected value never sends more than a
+    // pseudonym.
+    const identify = options.identify;
+    this.identify =
+      identify === false
+        ? undefined
+        : typeof identify === 'function'
+          ? identify
+          : defaultIdentify;
     this.identityResolved = false;
   }
 
@@ -306,15 +311,25 @@ export class VitestSentryReporter implements Reporter {
   }
 
   /**
-   * The developer who triggered the run, or `undefined` when `identity` is
-   * `false` or nothing could be resolved. Detected once and cached, since the
-   * trigger-er is constant across a single run.
+   * The user that `identify` picks, or `undefined` when `identify` is `false`,
+   * returns nothing, or throws. Resolved once and cached, since the developers
+   * behind a run do not change during the run.
    */
   private resolveIdentity(): SentryUser | undefined {
-    if (!this.identityEnabled) return undefined;
+    if (!this.identify) return undefined;
     if (!this.identityResolved) {
-      this.identityUser = detectIdentity(process.env, this.identityOptions);
       this.identityResolved = true;
+      try {
+        const user = this.identify(detectIdentities(process.env));
+        this.identityUser =
+          user?.id || user?.username || user?.email ? user : undefined;
+      } catch (error) {
+        // A broken callback costs the Sentry user, never the failure event.
+        console.warn(
+          '[vitest-sentry-reporter] identify threw; no user attached:',
+          error,
+        );
+      }
     }
     return this.identityUser;
   }

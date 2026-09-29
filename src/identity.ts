@@ -5,66 +5,56 @@ import { detectActor } from './actor-detectors/index.js';
 import { detectProvider } from './ci-providers/index.js';
 import type { SentryUser } from './types.js';
 
-/** Which signals {@link detectIdentity} may use. */
-export type IdentitySource = 'ci' | 'commit-author' | 'both';
-
 /**
- * How much of the identity reaches Sentry, from the least to the most
- * identifying:
- *
- * - `'pseudonym'`: one opaque `dev-<digest>` id. No name and no email.
- * - `'username'`: the login or the display name, plus the CI account id.
- * - `'email'`: the username, the id and the email address.
- *
- * Each level adds to the level before it. Only `'email'` sends direct personal
- * data, so a team opts in to it on purpose.
+ * One detected developer. The `id` is always a pseudonym and never a raw
+ * account id, so the `id` alone carries no personal data.
  */
-export type IdentityLevel = 'pseudonym' | 'username' | 'email';
+export type DetectedIdentity = {
+  /** Stable, opaque pseudonym: `dev-` and 16 hex characters of a SHA-256 digest. */
+  id: string;
+  /** The login or the display name, when the source exposes one. Personal data. */
+  username?: string;
+  /** The email address, when the source exposes one. Personal data. */
+  email?: string;
+};
 
-/** The level that applies when the caller sets none. */
-const DEFAULT_LEVEL: IdentityLevel = 'pseudonym';
-
-export type IdentityOptions = {
-  /** How much detail to send. Defaults to `'pseudonym'`. */
-  level?: IdentityLevel;
+/** The developers that the reporter detects for the current run. */
+export type DetectedIdentities = {
+  /** Who triggered the CI run, per provider. Absent outside CI. */
+  ci?: DetectedIdentity;
   /**
-   * `'ci'` = the CI trigger-er only; `'commit-author'` = git author / config /
-   * OS user only; `'both'` = the full chain (default).
+   * The author of the last non-merge commit, else `git config user.*`, else
+   * the OS username.
    */
-  source?: IdentitySource;
+  commitAuthor?: DetectedIdentity;
 };
 
 /**
- * Best-effort identity of the developer who triggered the current test run, for
- * Sentry's `scope.setUser` (which powers the "users affected" metric).
+ * Detect the developers behind the current test run, for the `identify`
+ * option. Each candidate gets a pseudonymous `id`, seeded by its email, then
+ * its CI account id, then its username.
  *
- * Resolution is a priority-ordered fallback chain:
- *   1. the CI run's trigger-er (per {@link detectProvider}),
- *   2. the last commit's git author,
- *   3. `git config user.name` / `user.email`,
- *   4. the OS username.
+ * `ci` comes from the CI provider (see {@link detectProvider}).
+ * `commitAuthor` comes from the last commit's git author, then `git config
+ * user.name` / `user.email`, then the OS username.
  *
- * Automation bots and AI agents are excluded up front so they never inflate the
- * developer count. Returns `undefined` when nothing usable can be resolved.
- *
- * The result carries only what {@link IdentityOptions.level} allows. The default
- * level is `'pseudonym'`, so no name and no email leave the machine.
+ * Automation bots and AI agents are excluded up front, so they never inflate
+ * the developer count. A candidate is absent when nothing usable resolves.
  */
-export function detectIdentity(
+export function detectIdentities(
   env: NodeJS.ProcessEnv = process.env,
-  options: IdentityOptions = {},
-): SentryUser | undefined {
+): DetectedIdentities {
   // Never attribute a failing run to a bot or an AI agent.
-  if (detectActor(env).type !== 'human') return undefined;
+  if (detectActor(env).type !== 'human') return {};
 
-  const source = options.source ?? 'both';
-  let raw: SentryUser | undefined;
-  if (source !== 'commit-author') raw = triggeredByCI(env);
-  if (!raw && source !== 'ci') {
-    raw = gitAuthor(env) ?? gitConfigUser() ?? osUser();
-  }
-
-  return finalizeUser(raw, options.level ?? DEFAULT_LEVEL);
+  const identities: DetectedIdentities = {};
+  const ci = toDetectedIdentity(triggeredByCI(env));
+  if (ci) identities.ci = ci;
+  const commitAuthor = toDetectedIdentity(
+    gitAuthor(env) ?? gitConfigUser() ?? osUser(),
+  );
+  if (commitAuthor) identities.commitAuthor = commitAuthor;
+  return identities;
 }
 
 function triggeredByCI(env: NodeJS.ProcessEnv): SentryUser | undefined {
@@ -112,41 +102,30 @@ function git(env: NodeJS.ProcessEnv, args: string[]): string | undefined {
   }
 }
 
-/** Keep the fields that the level allows, then drop the empty ones. */
-function finalizeUser(
-  user: SentryUser | undefined,
-  level: IdentityLevel,
-): SentryUser | undefined {
-  if (!user) return undefined;
-  // A pseudonym replaces the whole identity, so no other field survives.
-  if (level === 'pseudonym') return pseudonymousUser(user);
-  const { id, username, email } = user;
-  return cleanUser({
-    id,
-    username,
-    email: level === 'email' ? email : undefined,
-  });
-}
-
 /** Marks an id as a derived pseudonym and not a real account id. */
 const PSEUDONYM_PREFIX = 'dev-';
 /** Digest characters kept: 64 bits, which does not collide at team scale. */
 const PSEUDONYM_LENGTH = 16;
 
 /**
- * One opaque id and nothing else, so Sentry can count distinct developers
- * without a name or an email.
+ * Replace the raw id with a pseudonym, and keep the readable fields for the
+ * `identify` callback.
  *
  * The seed is the most stable identifier available: the email, then the CI
- * account id, then the username. The seed is lowercased, so the same developer
- * always gets the same pseudonym. The digest is reproducible: a maintainer who
- * knows the team emails can map a pseudonym back to a person offline.
+ * account id, then the username. The seed is trimmed and lowercased, so the
+ * same developer always gets the same pseudonym. The digest is reproducible: a
+ * maintainer who knows the team emails can map a pseudonym back offline.
  */
-function pseudonymousUser(user: SentryUser): SentryUser | undefined {
-  const seed = user.email ?? user.id ?? user.username;
+function toDetectedIdentity(
+  user: SentryUser | undefined,
+): DetectedIdentity | undefined {
+  const seed = user?.email ?? user?.id ?? user?.username;
   if (!seed) return undefined;
   const digest = sha256(seed.trim().toLowerCase()).slice(0, PSEUDONYM_LENGTH);
-  return { id: `${PSEUDONYM_PREFIX}${digest}` };
+  const identity: DetectedIdentity = { id: `${PSEUDONYM_PREFIX}${digest}` };
+  if (user?.username) identity.username = user.username;
+  if (user?.email) identity.email = user.email;
+  return identity;
 }
 
 function sha256(value: string): string {
