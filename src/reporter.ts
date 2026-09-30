@@ -29,11 +29,17 @@ import {
   toFailureContext,
 } from './utils.js';
 
-/** The default `identify`: the developer's pseudonym and nothing else. */
+/**
+ * The default `identify`: the pseudonymized id of the developer, else of the
+ * latest committer, so a run that a bot triggers still counts the person
+ * behind the change.
+ */
 function defaultIdentify({
   developer,
+  committer,
 }: DetectedIdentities): SentryUser | undefined {
-  return developer ? { id: developer.id } : undefined;
+  const person = developer ?? committer;
+  return person ? { id: person.pseudonymizedId } : undefined;
 }
 
 /** 1.5.0 options that no longer exist, and what replaces each one. */

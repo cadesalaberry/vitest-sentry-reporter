@@ -670,12 +670,17 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     ]);
   });
 
-  // The developer, as detectIdentities returns it for a local human run.
+  // Both people, as detectIdentities returns them for a local human run.
   const DETECTED: DetectedIdentities = {
     developer: {
-      id: 'dev-a0a0a0a0a0a0a0a0',
       username: 'Jane Dev',
       email: 'jane@acme.test',
+      pseudonymizedId: 'dev-a0a0a0a0a0a0a0a0',
+    },
+    committer: {
+      username: 'Pat Opener',
+      email: 'pat@acme.test',
+      pseudonymizedId: 'dev-c0c0c0c0c0c0c0c0',
     },
   };
 
@@ -719,7 +724,18 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     );
   });
 
-  it('sends no user and no tag when no developer is detected', async () => {
+  it('falls back to the committer when no developer is detected', async () => {
+    // For example a run that a bot triggers.
+    identity.detectIdentities.mockReturnValue({
+      committer: DETECTED.committer,
+    });
+
+    const scope = await reportOneFailure({});
+
+    expect(scope.setUser).toHaveBeenCalledWith({ id: 'dev-c0c0c0c0c0c0c0c0' });
+  });
+
+  it('sends no user and no tag when nobody is detected', async () => {
     identity.detectIdentities.mockReturnValue({});
 
     const scope = await reportOneFailure({});
@@ -732,7 +748,7 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
     const identify = vi.fn(({ developer }: DetectedIdentities) =>
       developer
-        ? { id: developer.id, username: developer.username }
+        ? { id: developer.pseudonymizedId, username: developer.username }
         : undefined,
     );
 
@@ -755,10 +771,14 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
 
     const scope = await reportOneFailure({
-      identify: ({ developer }) => developer,
+      identify: ({ developer: d }) =>
+        d && { id: d.pseudonymizedId, email: d.email },
     });
 
-    expect(scope.setUser).toHaveBeenCalledWith(DETECTED.developer);
+    expect(scope.setUser).toHaveBeenCalledWith({
+      id: 'dev-a0a0a0a0a0a0a0a0',
+      email: 'jane@acme.test',
+    });
   });
 
   it('lets identify pick a different user for each failure', async () => {
@@ -812,11 +832,11 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
     const warn = captureWarnings();
 
-    // In JavaScript, `({ developer }) => developer?.id` returns a string.
+    // In JavaScript, `({ developer }) => developer?.pseudonymizedId` returns a string.
     const scopes = await reportFailures(
       {
         identify: (({ developer }: DetectedIdentities) =>
-          developer?.id) as unknown as Options['identify'],
+          developer?.pseudonymizedId) as unknown as Options['identify'],
       },
       2,
     );
@@ -890,7 +910,7 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
   it('detects the developer once per run, and calls identify per failure', async () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
     const identify = vi.fn(({ developer }: DetectedIdentities) =>
-      developer ? { id: developer.id } : undefined,
+      developer ? { id: developer.pseudonymizedId } : undefined,
     );
 
     await reportFailures({ identify }, 3);

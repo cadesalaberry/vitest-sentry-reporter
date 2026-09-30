@@ -6,57 +6,71 @@ import { detectProvider } from './ci-providers/index.js';
 import type { SentryUser } from './types.js';
 
 /**
- * One detected developer. The `id` is always a pseudonym and never a raw
- * account id. It carries no name and no email, but it is pseudonymous
- * personal data: anybody who knows the seed can compute the same id.
+ * One detected person, with the fields that the source exposes. `id`,
+ * `username` and `email` are personal data. `pseudonymizedId` carries no name
+ * and no email, but it is still pseudonymous personal data.
  */
 export type DetectedIdentity = {
-  /** Stable, opaque pseudonym: `dev-` and 16 hex characters of a SHA-256 digest. */
-  id: string;
-  /** The login or the display name, when the source exposes one. Personal data. */
+  /** The account id, when the source exposes one (for example a CI account). */
+  id?: string;
+  /** The login or the display name, when the source exposes one. */
   username?: string;
-  /** The email address, when the source exposes one. Personal data. */
+  /** The email address, when the source exposes one. */
   email?: string;
+  /**
+   * `dev-` and 16 hex characters of the SHA-256 digest of the key that Sentry
+   * uses to count distinct users: `id:<id>`, else `username:<username>`, else
+   * `email:<email>`.
+   */
+  pseudonymizedId: string;
 };
 
-/** The developers that the reporter detects for the current run. */
+/** The people that the reporter detects for the current run. */
 export type DetectedIdentities = {
   /**
-   * The developer who ran the tests. In CI, the person who triggered the run.
-   * Outside CI, `git config user.*`, else the OS user. Absent for automation
-   * bots and AI agents, and in a CI that exposes no trigger-er.
+   * The person who ran the tests: in CI, the account that triggered the run,
+   * and outside CI, `git config user.*`, else the OS user. Absent when a bot
+   * or an AI agent runs the tests.
    */
   developer?: DetectedIdentity;
+  /**
+   * The person behind the latest commit (`HEAD`): its committer, else its
+   * author. GitHub, bots and AI agents do not count, so the field is absent
+   * when only they remain.
+   */
+  committer?: DetectedIdentity;
 };
 
 /**
- * Detect the developer who ran the tests, for the `identify` option. The
- * developer gets a pseudonymous `id`, seeded by the email, else the username,
- * else the CI account id.
+ * Detect the people behind the current test run, for the `identify` option.
  *
- * In CI, the developer is the person who triggered the run (see
- * {@link detectProvider}), and no git command runs. Outside CI, the developer
- * is `git config user.email` / `user.name`, else the OS username. The commit
- * history is never read, so the result does not depend on the checkout depth
- * or on the author of the last commit.
- *
- * Automation bots and AI agents are excluded up front, so they never inflate
- * the developer count. `developer` is absent when nothing usable resolves.
+ * `developer` comes from the CI provider in CI (see {@link detectProvider}),
+ * and from `git config`, else the OS user, outside CI. `committer` comes from
+ * the `HEAD` commit. Each one is absent when nothing usable resolves.
  */
 export function detectIdentities(
   env: NodeJS.ProcessEnv = process.env,
 ): DetectedIdentities {
-  // Never attribute a failing run to a bot or an AI agent.
-  if (detectActor(env).type !== 'human') return {};
+  const identities: DetectedIdentities = {};
+  // Never attribute a run to the bot or the AI agent that runs it.
+  if (detectActor(env).type === 'human') {
+    const person = runner(env);
+    if (person && !isAutomation(person)) {
+      identities.developer = toDetectedIdentity(person);
+    }
+  }
+  const committer = toDetectedIdentity(latestCommitter(env));
+  if (committer) identities.committer = committer;
+  return identities;
+}
 
+function runner(env: NodeJS.ProcessEnv): SentryUser | undefined {
   // In CI, the git user and the OS user belong to the machine and not to a
   // developer, so a CI that exposes no trigger-er yields no developer.
   const provider = detectProvider(env);
-  const user = provider
+  return provider
     ? cleanUser(provider.triggeredBy(env))
     : (gitConfigUser(env) ?? osUser());
-  const developer = toDetectedIdentity(user);
-  return developer ? { developer } : {};
 }
 
 function gitConfigUser(env: NodeJS.ProcessEnv): SentryUser | undefined {
@@ -73,6 +87,37 @@ function osUser(): SentryUser | undefined {
     // os.userInfo throws when there is no mapped OS user (e.g. some sandboxes).
     return undefined;
   }
+}
+
+function latestCommitter(env: NodeJS.ProcessEnv): SentryUser | undefined {
+  // HEAD carries its own metadata even in a depth-1 clone, so the result does
+  // not depend on the checkout depth. A unit separator splits the fields.
+  const out = git(env, ['log', '-1', '--format=%cn%x1f%ce%x1f%an%x1f%ae']);
+  if (!out) return undefined;
+  const [committerName, committerEmail, authorName, authorEmail] =
+    out.split('\x1f');
+  // GitHub is the committer of every commit merged on github.com, so the
+  // author stands in for it.
+  return [
+    cleanUser({ username: committerName, email: committerEmail }),
+    cleanUser({ username: authorName, email: authorEmail }),
+  ].find((person) => person && !isAutomation(person));
+}
+
+/**
+ * Commit identities that are not a developer: GitHub itself, which commits
+ * the merges made on github.com, and the AI agents that commit under their own
+ * name. Add an agent here when it commits with a new address.
+ */
+const AUTOMATION_EMAILS = new Set([
+  'noreply@github.com',
+  'noreply@anthropic.com',
+]);
+
+/** GitHub, an AI agent, or a GitHub App bot such as `dependabot[bot]`. */
+function isAutomation({ username, email }: SentryUser): boolean {
+  if (email && AUTOMATION_EMAILS.has(email.toLowerCase())) return true;
+  return /\[bot\]/.test(`${username ?? ''} ${email ?? ''}`);
 }
 
 /** Run git and return trimmed stdout, or `undefined` if git is absent or fails. */
@@ -97,26 +142,26 @@ const PSEUDONYM_PREFIX = 'dev-';
 const PSEUDONYM_LENGTH = 16;
 
 /**
- * Replace the raw id with a pseudonym, and keep the readable fields for the
- * `identify` callback.
- *
- * The seed is the email, else the username, else the CI account id. The
- * username comes before the account id because GitHub exposes the id of
- * `GITHUB_ACTOR` only: on a re-run by another person, the trigger-er has a
- * login and no id. A login seed gives one account one pseudonym in every run.
- * The seed is trimmed and lowercased. The digest is not salted, so anybody who
- * knows the seed can compute the same pseudonym offline.
+ * Keep the detected fields, and add the pseudonymized id. Its seed is the key
+ * that Sentry uses to count distinct users (`EventUser.tag_value` in Sentry):
+ * `id:<id>`, else `username:<username>`, else `email:<email>`. Two payloads
+ * therefore get one pseudonymized id exactly when Sentry counts them as one
+ * user. The digest is not salted, so anybody who knows the seed can compute
+ * the same id offline.
  */
 function toDetectedIdentity(
   user: SentryUser | undefined,
 ): DetectedIdentity | undefined {
-  const seed = user?.email ?? user?.username ?? user?.id;
-  if (!seed) return undefined;
-  const digest = sha256(seed.trim().toLowerCase()).slice(0, PSEUDONYM_LENGTH);
-  const identity: DetectedIdentity = { id: `${PSEUDONYM_PREFIX}${digest}` };
-  if (user?.username) identity.username = user.username;
-  if (user?.email) identity.email = user.email;
-  return identity;
+  if (!user) return undefined;
+  const digest = sha256(sentryUserKey(user)).slice(0, PSEUDONYM_LENGTH);
+  return { ...user, pseudonymizedId: `${PSEUDONYM_PREFIX}${digest}` };
+}
+
+/** Every caller passes a cleaned user, so one of the three fields is set. */
+function sentryUserKey({ id, username, email }: SentryUser): string {
+  if (id) return `id:${id}`;
+  if (username) return `username:${username}`;
+  return `email:${email}`;
 }
 
 function sha256(value: string): string {

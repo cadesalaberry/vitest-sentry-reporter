@@ -22,14 +22,31 @@ vi.mock('./ci-providers/index.js', () => ci);
 import { detectIdentities } from './identity.js';
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
-const pseudonym = (v: string) => `dev-${sha256(v).slice(0, 16)}`;
+/** The pseudonymized id of a Sentry user key such as `id:42`. */
+const pseudonym = (key: string) => `dev-${sha256(key).slice(0, 16)}`;
 
-/** Drive the mocked git so `git config` returns canned output. */
-function gitConfigReturns(map: { name?: string; email?: string }) {
+type Person = { name: string; email: string };
+const JANE: Person = { name: 'Jane Dev', email: 'jane@acme.test' };
+const GITHUB: Person = { name: 'GitHub', email: 'noreply@github.com' };
+
+/** Drive the mocked git: `git config` and the `HEAD` committer and author. */
+function gitReturns(map: {
+  name?: string;
+  email?: string;
+  committer?: Person;
+  author?: Person;
+}) {
   cp.execFileSync.mockImplementation((_cmd: string, args: string[]) => {
     if (args[0] === 'config' && args[2] === 'user.name') return map.name ?? '';
     if (args[0] === 'config' && args[2] === 'user.email')
       return map.email ?? '';
+    if (args[0] === 'log') {
+      const { committer, author = committer } = map;
+      if (!committer || !author) return '';
+      return [committer.name, committer.email, author.name, author.email].join(
+        '\x1f',
+      );
+    }
     return '';
   });
 }
@@ -50,54 +67,68 @@ describe('detectIdentities', () => {
     osMock.userInfo.mockReturnValue({ username: 'os-user' });
   });
 
-  it('detects nothing and skips detection for a bot', () => {
-    actor.detectActor.mockReturnValue({ type: 'bot', name: 'dependabot' });
-    inCI({ username: 'should-not-be-used' });
-
-    expect(detectIdentities({})).toEqual({});
-    expect(ci.detectProvider).not.toHaveBeenCalled();
-    expect(cp.execFileSync).not.toHaveBeenCalled();
-  });
-
-  it('detects nothing for an AI agent', () => {
-    actor.detectActor.mockReturnValue({ type: 'ai', name: 'claude-code' });
-    gitConfigReturns({ name: 'Jane Dev', email: 'jane@acme.test' });
-
-    expect(detectIdentities({})).toEqual({});
-  });
-
-  it('picks the CI trigger-er in CI, and runs no git command', () => {
+  it('keeps the detected fields and adds the pseudonymized id', () => {
     inCI({ username: 'alice', id: '42' });
-    gitConfigReturns({ name: 'CI Machine', email: 'ci@acme.test' });
 
-    expect(detectIdentities({})).toEqual({
-      developer: { id: pseudonym('alice'), username: 'alice' },
+    expect(detectIdentities({}).developer).toEqual({
+      id: '42',
+      username: 'alice',
+      pseudonymizedId: pseudonym('id:42'),
     });
-    expect(cp.execFileSync).not.toHaveBeenCalled();
+  });
+
+  it('seeds the pseudonymized id like Sentry counts users: id, then username, then email', () => {
+    inCI({ id: '42', username: 'alice', email: 'a@acme.test' });
+    expect(detectIdentities({}).developer?.pseudonymizedId).toBe(
+      pseudonym('id:42'),
+    );
+
+    inCI({ username: 'alice', email: 'a@acme.test' });
+    expect(detectIdentities({}).developer?.pseudonymizedId).toBe(
+      pseudonym('username:alice'),
+    );
+
+    inCI({ email: 'a@acme.test' });
+    expect(detectIdentities({}).developer?.pseudonymizedId).toBe(
+      pseudonym('email:a@acme.test'),
+    );
+  });
+
+  it('gives two people two pseudonymized ids', () => {
+    inCI({ id: '42' });
+    const first = detectIdentities({}).developer?.pseudonymizedId;
+    inCI({ id: '43' });
+    expect(detectIdentities({}).developer?.pseudonymizedId).not.toBe(first);
+  });
+
+  it('picks the CI trigger-er as the developer in CI', () => {
+    inCI({ username: 'alice', id: '42' });
+    gitReturns({ name: 'CI Machine', email: 'ci@acme.test' });
+
+    expect(detectIdentities({}).developer?.username).toBe('alice');
+    // The git user of a CI machine is never asked for.
+    const commands = cp.execFileSync.mock.calls.map(([, args]) => args);
+    expect(commands).not.toContainEqual(['config', '--get', 'user.email']);
   });
 
   it('detects no developer in a CI that exposes no trigger-er', () => {
-    // The git user and the OS user of a CI machine are not a developer.
     inCI(undefined);
-    gitConfigReturns({ name: 'CI Machine', email: 'ci@acme.test' });
-    expect(detectIdentities({})).toEqual({});
+    gitReturns({ name: 'CI Machine', email: 'ci@acme.test' });
+    expect(detectIdentities({})).not.toHaveProperty('developer');
 
     inCI({ username: '' });
-    expect(detectIdentities({})).toEqual({});
-    expect(cp.execFileSync).not.toHaveBeenCalled();
+    expect(detectIdentities({})).not.toHaveProperty('developer');
     expect(osMock.userInfo).not.toHaveBeenCalled();
   });
 
-  it('picks the git user outside CI', () => {
-    gitConfigReturns({ name: 'Jane Dev', email: 'jane@acme.test' });
+  it('picks the git user as the developer outside CI', () => {
+    gitReturns({ name: JANE.name, email: JANE.email });
     const env = { HOME: '/home/jane' };
 
-    expect(detectIdentities(env)).toEqual({
-      developer: {
-        id: pseudonym('jane@acme.test'),
-        username: 'Jane Dev',
-        email: 'jane@acme.test',
-      },
+    expect(detectIdentities(env).developer).toEqual({
+      username: JANE.name,
+      email: JANE.email,
+      pseudonymizedId: pseudonym(`username:${JANE.name}`),
     });
     // git runs with the given environment, so that its config resolves there.
     expect(cp.execFileSync).toHaveBeenCalledWith(
@@ -107,22 +138,66 @@ describe('detectIdentities', () => {
     );
   });
 
-  it('never reads the commit history', () => {
-    gitConfigReturns({ name: 'Jane Dev', email: 'jane@acme.test' });
-    detectIdentities({});
+  it('detects no developer when the git user is a bot or an AI agent', () => {
+    // For example a sandbox that commits as the agent, with no AI marker set.
+    gitReturns({ name: 'Claude', email: 'noreply@anthropic.com' });
+    expect(detectIdentities({})).not.toHaveProperty('developer');
 
-    const commands = cp.execFileSync.mock.calls.map(
-      ([, args]) => (args as string[])[0],
-    );
-    expect(commands.length).toBeGreaterThan(0);
-    expect(commands.every((command) => command === 'config')).toBe(true);
+    inCI({ username: 'renovate[bot]' });
+    expect(detectIdentities({})).not.toHaveProperty('developer');
   });
 
   it('falls back to the OS username when git has no user', () => {
-    gitConfigReturns({});
-    expect(detectIdentities({})).toEqual({
-      developer: { id: pseudonym('os-user'), username: 'os-user' },
+    gitReturns({});
+    expect(detectIdentities({}).developer).toEqual({
+      username: 'os-user',
+      pseudonymizedId: pseudonym('username:os-user'),
     });
+  });
+
+  it('detects no developer for a bot or an AI agent, but still the committer', () => {
+    gitReturns({ committer: JANE });
+
+    for (const type of ['bot', 'ai']) {
+      actor.detectActor.mockReturnValue({ type, name: type });
+      inCI({ username: 'should-not-be-used' });
+
+      expect(detectIdentities({})).toEqual({
+        committer: {
+          username: JANE.name,
+          email: JANE.email,
+          pseudonymizedId: pseudonym(`username:${JANE.name}`),
+        },
+      });
+    }
+  });
+
+  it('reads only the HEAD commit for the committer, not the history', () => {
+    gitReturns({ committer: JANE });
+    detectIdentities({});
+
+    const log = cp.execFileSync.mock.calls
+      .map(([, args]) => args as string[])
+      .filter((args) => args[0] === 'log');
+    expect(log).toEqual([['log', '-1', '--format=%cn%x1f%ce%x1f%an%x1f%ae']]);
+  });
+
+  it('uses the author when GitHub is the committer', () => {
+    gitReturns({ committer: GITHUB, author: JANE });
+    expect(detectIdentities({}).committer?.email).toBe(JANE.email);
+  });
+
+  it('detects no committer for GitHub, a bot or an AI agent', () => {
+    const release: Person = {
+      name: 'github-actions[bot]',
+      email: '41898282+github-actions[bot]@users.noreply.github.com',
+    };
+    const agent: Person = { name: 'Claude', email: 'noreply@anthropic.com' };
+
+    for (const author of [release, agent, GITHUB]) {
+      gitReturns({ committer: GITHUB, author });
+      expect(detectIdentities({})).not.toHaveProperty('committer');
+    }
   });
 
   it('detects nothing when git is absent and there is no OS user', () => {
@@ -133,45 +208,5 @@ describe('detectIdentities', () => {
       throw new Error('no mapped user');
     });
     expect(detectIdentities({})).toEqual({});
-  });
-
-  it('never exposes the raw CI account id', () => {
-    inCI({ id: '42' });
-    const { developer } = detectIdentities({});
-
-    expect(developer?.id).toMatch(/^dev-[0-9a-f]{16}$/);
-    expect(JSON.stringify(developer)).not.toContain('"42"');
-  });
-
-  it('seeds the pseudonym from the email, then the username, then the account id', () => {
-    inCI({ username: 'alice', id: '42', email: 'a@acme.test' });
-    expect(detectIdentities({}).developer?.id).toBe(pseudonym('a@acme.test'));
-
-    inCI({ username: 'alice', id: '42' });
-    expect(detectIdentities({}).developer?.id).toBe(pseudonym('alice'));
-
-    inCI({ id: '42' });
-    expect(detectIdentities({}).developer?.id).toBe(pseudonym('42'));
-  });
-
-  it('gives one GitHub account one pseudonym, with or without its account id', () => {
-    // A first run carries the account id; a re-run of another person's run
-    // carries the login only. Both must count as the same developer.
-    inCI({ username: 'alice', id: '42' });
-    const firstRun = detectIdentities({}).developer?.id;
-
-    inCI({ username: 'alice' });
-    expect(detectIdentities({}).developer?.id).toBe(firstRun);
-  });
-
-  it('gives the same pseudonym to the same developer, and only to them', () => {
-    gitConfigReturns({ name: 'Jane', email: '  Jane@Acme.test ' });
-    const first = detectIdentities({}).developer?.id;
-
-    gitConfigReturns({ name: 'Jane', email: 'jane@acme.test' });
-    expect(detectIdentities({}).developer?.id).toBe(first);
-
-    gitConfigReturns({ name: 'Bob', email: 'bob@acme.test' });
-    expect(detectIdentities({}).developer?.id).not.toBe(first);
   });
 });

@@ -71,31 +71,12 @@ export type VitestSentryReporterOptions = {
    */
   getFingerprint?: (ctx: FailureContext) => string[] | undefined;
   /**
-   * Pick the Sentry user for each failure. The Sentry user drives Sentry's
-   * "users affected" metric, so Sentry ranks each failed test by the number
-   * of developers that it blocks. A searchable `triggered_by` tag carries the
-   * username, else the id.
+   * Pick the Sentry user for each failure. Sentry counts distinct users, so it
+   * ranks each failure by the number of developers that it affects.
    *
-   * The reporter detects the developer once per run, on the first failure.
-   * Then it calls the function for each failure, with that detection and the
-   * failure context. `developer` is the person who ran the tests: in CI, the
-   * person who triggered the run, and outside CI, `git config user.*`, else
-   * the OS user. Its `id` is always an opaque pseudonym. Its `username` and
-   * its `email` are present when the source exposes them. Automation bots and
-   * AI agents (detected via {@link detectActor}) are excluded, so `developer`
-   * is absent for them.
-   *
-   * The default sends the pseudonym of the developer and nothing else:
-   *
-   * ```ts
-   * identify: ({ developer }) => developer && { id: developer.id }
-   * ```
-   *
-   * The pseudonym carries no name and no email, but it is still personal
-   * data. Return more fields to send more. Return `undefined` to send no user,
-   * or set `false` to skip the detection. A function that throws, or that
-   * returns a value that is not a Sentry user, sends no user and logs one
-   * warning.
+   * The default sends `{ id: pseudonymizedId }` of `developer`, else of
+   * `committer`. The pseudonymized id is still personal data. Set `false` to
+   * send no user. See the README section "Who triggered the run".
    */
   identify?:
     | ((

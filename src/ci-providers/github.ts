@@ -3,17 +3,14 @@ import type { CIProvider } from './types.js';
 export const GitHubActionsProvider: CIProvider = {
   name: 'github',
   isActive: (env) => Boolean(env.GITHUB_ACTIONS),
-  // GITHUB_TRIGGERING_ACTOR is the account that initiated the run (including a
-  // re-run), which is exactly "who triggered this"; GITHUB_ACTOR is the wider
-  // fallback. GITHUB_ACTOR_ID is the numeric id of GITHUB_ACTOR only, so it is
-  // attached only when both name the same account: on a re-run by someone
-  // else, it belongs to the original actor.
-  triggeredBy: (env) => {
-    const username = env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR;
-    if (!username) return undefined;
-    const id = username === env.GITHUB_ACTOR ? env.GITHUB_ACTOR_ID : undefined;
-    return id ? { username, id } : { username };
-  },
+  // GITHUB_ACTOR triggered the workflow, and GITHUB_ACTOR_ID is its numeric
+  // id, so both always describe one account. A re-run keeps the original
+  // actor: GITHUB_TRIGGERING_ACTOR names whoever started the re-run, but
+  // GitHub exposes no id for that account.
+  triggeredBy: (env) =>
+    env.GITHUB_ACTOR
+      ? { username: env.GITHUB_ACTOR, id: env.GITHUB_ACTOR_ID }
+      : undefined,
   repository: (env) => env.GITHUB_REPOSITORY,
   branch: (env) => env.GITHUB_REF_NAME,
   commitSha: (env) => env.GITHUB_SHA,
