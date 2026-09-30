@@ -29,11 +29,30 @@ import {
   toFailureContext,
 } from './utils.js';
 
-/** The default `identify`: the commit author's pseudonym and nothing else. */
+/** The default `identify`: the developer's pseudonym and nothing else. */
 function defaultIdentify({
-  commitAuthor,
+  developer,
 }: DetectedIdentities): SentryUser | undefined {
-  return commitAuthor ? { id: commitAuthor.id } : undefined;
+  return developer ? { id: developer.id } : undefined;
+}
+
+/** 1.5.0 options that no longer exist, and what replaces each one. */
+const REMOVED_OPTIONS: Readonly<Record<string, string>> = {
+  identity: 'identify',
+  getUser: 'identify(detected, ctx)',
+};
+
+/** Sentry needs an id, a username or an email to count a user. */
+function isSentryUser(value: unknown): value is SentryUser {
+  if (typeof value !== 'object' || value === null) return false;
+  const { id, username, email } = value as SentryUser;
+  return Boolean(id || username || email);
+}
+
+function describeValue(value: unknown): string {
+  return typeof value === 'object' && value !== null
+    ? 'an object without an id, a username or an email'
+    : `a ${typeof value}`;
 }
 
 export class VitestSentryReporter implements Reporter {
@@ -47,9 +66,12 @@ export class VitestSentryReporter implements Reporter {
   private maxEventsPerRun?: number;
   private codeownersEnabled: boolean;
   private codeownersRoot?: string;
-  private identify?: (detected: DetectedIdentities) => SentryUser | undefined;
-  private identityResolved: boolean;
-  private identityUser?: SentryUser;
+  private identify?: (
+    detected: DetectedIdentities,
+    ctx: FailureContext,
+  ) => SentryUser | undefined;
+  private detected?: DetectedIdentities;
+  private warned: Set<string>;
 
   constructor(options: VitestSentryReporterOptions = {}) {
     this.name = 'vitest-sentry-reporter';
@@ -81,7 +103,17 @@ export class VitestSentryReporter implements Reporter {
         : typeof identify === 'function'
           ? identify
           : defaultIdentify;
-    this.identityResolved = false;
+    this.warned = new Set<string>();
+
+    // A JavaScript config can still carry a 1.5.0 key. Say once that it has
+    // no effect, instead of ignoring it silently.
+    for (const [key, replacement] of Object.entries(REMOVED_OPTIONS)) {
+      if (key in options) {
+        console.warn(
+          `[vitest-sentry-reporter] The "${key}" option no longer exists and has no effect. Use "${replacement}" instead.`,
+        );
+      }
+    }
   }
 
   onInit(): void {
@@ -158,9 +190,9 @@ export class VitestSentryReporter implements Reporter {
       owners.length > 0
         ? { code_owners: owners.join(','), code_owner: owners[0] }
         : {};
-    // Searchable counterpart to the Sentry user: who triggered the run.
-    const identityUser = this.resolveIdentity();
-    const triggeredBy = identityUser?.username ?? identityUser?.id;
+    // The Sentry user for this failure, and its searchable counterpart.
+    const user = this.resolveUser(ctx);
+    const triggeredBy = user?.username ?? user?.id;
     const identityTags: Record<string, Primitive> = triggeredBy
       ? { triggered_by: triggeredBy }
       : {};
@@ -224,8 +256,6 @@ export class VitestSentryReporter implements Reporter {
       if (Object.keys(ci).length > 0) scope.setContext('ci', ci);
       scope.setFingerprint(fingerprint);
 
-      // getUser wins; otherwise fall back to the auto-detected identity.
-      const user = this.options.getUser?.(ctx) ?? identityUser;
       if (user) scope.setUser(user);
 
       if (this.options.beforeSend) {
@@ -311,27 +341,38 @@ export class VitestSentryReporter implements Reporter {
   }
 
   /**
-   * The user that `identify` picks, or `undefined` when `identify` is `false`,
-   * returns nothing, or throws. Resolved once and cached, since the developers
-   * behind a run do not change during the run.
+   * The user that `identify` picks for one failure, or `undefined` when
+   * `identify` is `false`, returns nothing, returns a value that is not a
+   * Sentry user, or throws. The detection runs once, on the first failure,
+   * since the developer behind a run does not change during the run.
    */
-  private resolveIdentity(): SentryUser | undefined {
+  private resolveUser(ctx: FailureContext): SentryUser | undefined {
     if (!this.identify) return undefined;
-    if (!this.identityResolved) {
-      this.identityResolved = true;
-      try {
-        const user = this.identify(detectIdentities(process.env));
-        this.identityUser =
-          user?.id || user?.username || user?.email ? user : undefined;
-      } catch (error) {
-        // A broken callback costs the Sentry user, never the failure event.
-        console.warn(
-          '[vitest-sentry-reporter] identify threw; no user attached:',
-          error,
-        );
-      }
+    this.detected ??= detectIdentities(process.env);
+    let user: unknown;
+    try {
+      user = this.identify(this.detected, ctx);
+    } catch (error) {
+      // A broken callback costs the Sentry user, never the failure event.
+      this.warnOnce(
+        'identify threw an error. The reporter sends the failure without a user.',
+        error,
+      );
+      return undefined;
     }
-    return this.identityUser;
+    if (!user) return undefined;
+    if (isSentryUser(user)) return user;
+    this.warnOnce(
+      `identify returned ${describeValue(user)}, and not a Sentry user with an id, a username or an email. The reporter sends the failure without a user.`,
+    );
+    return undefined;
+  }
+
+  /** Log each warning once per run, however many failures trigger it. */
+  private warnOnce(message: string, ...details: unknown[]): void {
+    if (this.warned.has(message)) return;
+    this.warned.add(message);
+    console.warn(`[vitest-sentry-reporter] ${message}`, ...details);
   }
 }
 

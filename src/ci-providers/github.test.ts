@@ -72,10 +72,22 @@ describe('GitHubActionsProvider', () => {
       GitHubActionsProvider.triggeredBy({
         ...env,
         GITHUB_TRIGGERING_ACTOR: 'alice',
-        GITHUB_ACTOR: 'bob',
+        GITHUB_ACTOR: 'alice',
         GITHUB_ACTOR_ID: '42',
       }),
     ).toEqual({ username: 'alice', id: '42' });
+  });
+
+  it('drops the numeric id on a re-run by another account', () => {
+    // GITHUB_ACTOR_ID is the id of GITHUB_ACTOR (bob), not of alice.
+    expect(
+      GitHubActionsProvider.triggeredBy({
+        ...env,
+        GITHUB_TRIGGERING_ACTOR: 'alice',
+        GITHUB_ACTOR: 'bob',
+        GITHUB_ACTOR_ID: '42',
+      }),
+    ).toStrictEqual({ username: 'alice' });
   });
 
   it('falls back to GITHUB_ACTOR and has none without either', () => {

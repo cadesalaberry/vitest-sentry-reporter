@@ -15,5 +15,5 @@ export {
   detectIdentities,
 } from './identity.js';
 export { default } from './reporter.js';
-export type { SentryUser } from './types.js';
+export type { FailureContext, SentryUser } from './types.js';
 export { detectTrigger, TRIGGER_ENV } from './utils.js';

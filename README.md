@@ -115,15 +115,12 @@ export default defineConfig({
           ctx.testName,
         ],
 
-        // Sentry user for the event, useful for local runs.
-        // Default: none. This function wins over `identify`.
-        getUser: () => ({ username: process.env.USER }),
-
-        // Pick the Sentry user from the detected developers, so Sentry counts
-        // and ranks failures per developer. The function below is the
-        // default: the commit author's pseudonym, no name and no email.
-        // Set `false` to turn identity off.
-        identify: ({ commitAuthor }) => commitAuthor && { id: commitAuthor.id },
+        // Sentry user for each failure, picked from the detected developer,
+        // so Sentry counts and ranks failures per developer. The function
+        // below is the default: the pseudonym of the developer who ran the
+        // tests, no name and no email. The second argument is the failure
+        // context. Set `false` to send no user.
+        identify: ({ developer }) => developer && { id: developer.id },
 
         // Attach `code_owners` and `code_owner` tags from CODEOWNERS.
         // Default: false. `true` is the same as { enabled: true }.
@@ -168,8 +165,8 @@ export default defineConfig({
 });
 ```
 
-The `ctx` passed to `shouldReport`, `getTags`, `getFingerprint`, `getUser` and
-`beforeSend` is the failure context. It carries `testName`, `fullTitle`,
+The `ctx` passed to `shouldReport`, `getTags`, `getFingerprint` and
+`beforeSend`, and the second argument of `identify`, is the failure context. It carries `testName`, `fullTitle`,
 `suitePath`, `filePath`, `relativeFilePath`, `message`, `stack`, `error`,
 `durationMs`, `retry`, `flaky`, `logs` and `meta`.
 
@@ -177,7 +174,7 @@ The `ctx` passed to `shouldReport`, `getTags`, `getFingerprint`, `getUser` and
 
 - **Error**: The thrown error from the failed test (or synthesized from message).
 - **Tags**: `test_file` (repo-relative path, see below), `test_name`, `test_full_title`, `test_project` (Vitest project/workspace name, handy for monorepos), `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `job_name` (CI job/step/shard name), `repository`, `branch`, `commit_sha`, `run_url` (link to the CI run/build, when detected), plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus `triggered_by` when `identify` returns a user, plus any custom tags.
-- **User**: the developer that `identify` picks, which powers Sentry's "users affected" metric. By default, the commit author's pseudonym (see below).
+- **User**: the user that `identify` picks, which powers Sentry's "users affected" metric. By default, the pseudonym of the developer who ran the tests (see below).
 - **Extras**: `duration_ms`, `logs`, `suite_path`, `vitest_version`, minimal CI env snapshot.
 - **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky; in CI, a `ci` context with direct triage links — `pull_request_url`, `run_url`, `commit_url`, and `workflow_id` — for whichever the detected provider exposes. Sentry renders these URLs as clickable links, so the failing run, pull request and commit are one click from the issue.
 - **Fingerprint**: Defaults to `['vitest-failure', repoRelativeFile, testName]`; override with `getFingerprint`.
@@ -241,81 +238,81 @@ The same three tags can also be pinned from the reporter options (`tags` or
 
 `actor_type`/`actor_name` tell you _what kind_ of actor ran the tests. For a
 human they stop at `human` and drop the login. The `identify` option attributes
-each failure to a developer. It sets Sentry's **user**, which drives the
-built-in "N users affected" metric. Sentry then ranks each failed test by the
-number of developers that it blocks. A searchable `triggered_by` tag carries
-the username, else the id.
+each failure to the developer who ran the tests. It sets Sentry's **user**,
+which drives the built-in "N users affected" metric. Sentry then ranks each
+failed test by the number of developers that it blocks. A searchable
+`triggered_by` tag carries the username, else the id.
 
-**Identity is on by default, and the default sends no personal data.** Sentry
-receives one opaque id for the commit author, for example
-`dev-e383094d4770a80f`, and nothing else.
+**Identity is on by default.** The default sends no name and no email. It sends
+one pseudonymous id for the developer, for example `dev-e383094d4770a80f`. That
+id is still personal data under the GDPR (see [The pseudonym](#the-pseudonym)).
 
-`identify` is a function. The reporter calls it once per run with the
-developers that it detects, and sends the user that the function returns:
+`identify` is a function. The reporter detects the developer once per run, on
+the first failure. Then it calls the function for each failure, with the
+detection and the failure context, and it sends the user that the function
+returns:
 
 ```ts
 new VitestSentryReporter({
-  // The default: the commit author's pseudonym, and nothing else.
-  identify: ({ commitAuthor }) => commitAuthor && { id: commitAuthor.id },
+  // The default: the pseudonym of the developer, and nothing else.
+  identify: ({ developer }) => developer && { id: developer.id },
 });
 ```
 
-The function receives two candidates:
+`developer` is the person who ran the tests:
 
-| Candidate      | Who                                                                                     |
-| -------------- | --------------------------------------------------------------------------------------- |
-| `commitAuthor` | The author of the last non-merge commit, else `git config user.*`, else the OS username. |
-| `ci`           | The person who triggered the CI run. Absent outside CI.                                 |
+| Where the tests run | `developer`                                                            |
+| ------------------- | ---------------------------------------------------------------------- |
+| In CI               | The person who triggered the CI run.                                   |
+| Outside CI          | The git user (`git config user.email`, `user.name`), else the OS user. |
 
-Each candidate has an `id`, plus the `username` and the `email` when the source
-knows them. The `id` is always a pseudonym, never a raw account id. The
-`username` and the `email` are personal data, and they reach Sentry only when
-your function returns them.
+It has an `id`, plus the `username` and the `email` when the source knows them.
+The `id` is always a pseudonym, never a raw account id. The `username` and the
+`email` reach Sentry only when your function returns them.
 
-| To send                                  | `identify`                                                        |
-| ---------------------------------------- | ----------------------------------------------------------------- |
-| The pseudonym only (default)             | `({ commitAuthor }) => commitAuthor && { id: commitAuthor.id }`   |
-| The pseudonym and the name               | `({ commitAuthor: a }) => a && { id: a.id, username: a.username }` |
-| All that git knows, email included       | `({ commitAuthor }) => commitAuthor`                              |
-| The pseudonym of the CI trigger-er       | `({ ci }) => ci && { id: ci.id }`                                 |
-| No user and no tag, with no detection    | `false`                                                           |
+| To send                               | `identify`                                                                                     |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| The pseudonym only (default)          | `({ developer }) => developer && { id: developer.id }`                                         |
+| The pseudonym and the name            | `({ developer: d }) => d && { id: d.id, username: d.username }`                                |
+| All that the reporter knows           | `({ developer }) => developer`                                                                 |
+| No user for one Vitest project        | `({ developer: d }, ctx) => ctx.meta?.projectName === 'e2e' ? undefined : d && { id: d.id }`   |
+| No user and no tag, with no detection | `false`                                                                                        |
 
-Return `undefined` to send no user. If the function throws, the reporter sends
-the failure without a user and logs one warning. Automation bots and AI agents
-(the same ones detected for `actor_type`) are excluded, so both candidates are
-absent for them.
+Return `undefined` to send no user. If the function throws, or returns a value
+that is not a Sentry user, the reporter sends the failure without a user and
+logs one warning. Automation bots and AI agents (the same ones detected for
+`actor_type`) are excluded, so `developer` is absent for them.
 
-#### How the developers are detected
+#### How the developer is detected
 
-- **`ci`**: the CI run's trigger-er, per provider (GitHub `GITHUB_TRIGGERING_ACTOR`/`GITHUB_ACTOR`, GitLab `GITLAB_USER_*`, CircleCI `CIRCLE_USERNAME`, Buildkite `BUILDKITE_BUILD_CREATOR*`, Jenkins `CHANGE_AUTHOR*`/`BUILD_USER*`).
-- **`commitAuthor`**: the last non-merge commit's git author, then `git config user.name` / `user.email`, then the OS username.
+- **In CI**: the person who triggered the run, per provider (GitHub `GITHUB_TRIGGERING_ACTOR`/`GITHUB_ACTOR`, GitLab `GITLAB_USER_*`, CircleCI `CIRCLE_USERNAME`, Buildkite `BUILDKITE_BUILD_CREATOR*`, Jenkins `CHANGE_AUTHOR*`/`BUILD_USER*`). No git command runs. A CI that exposes no trigger-er, for example a bare `CI=true`, gives no developer, because the git user and the OS user of a CI machine are not a developer.
+- **Outside CI**: `git config user.email` and `user.name`, else the OS username. The reporter does not read the commit history, so the result does not depend on the checkout depth or on who wrote the last commit.
 
-The trigger-er is "who started the run", which can differ from the commit
-author on re-runs, merges and scheduled jobs.
-
-`getUser` takes precedence over `identify` for the Sentry user when both are
-set. A manual `triggered_by` in `tags`/`getTags` overrides the detected one. The
+On a re-run, the trigger-er is the person who started the re-run. A manual
+`triggered_by` in `tags`/`getTags` overrides the detected one. The
 `detectIdentities` helper is exported for reuse.
 
 #### The pseudonym
 
-Every candidate `id` has four properties:
+Every `id` has four properties:
 
-- **Stable**: one developer always gets the same id, so the count stays correct across runs.
+- **Stable**: one git identity or one CI account always gets the same id, so the count stays correct across runs.
 - **Opaque**: the id is the first 16 characters of a SHA-256 digest, with a `dev-` prefix.
-- **Seeded** by the most stable identifier available: the email, then the CI account id, then the username. The seed is trimmed and lowercased first.
-- **Reproducible**: a maintainer who knows the team emails can compute the same digests offline, and map an id back to a person without Sentry.
+- **Seeded** by the email, else the username, else the CI account id. The seed is trimmed and lowercased first.
+- **Reproducible**: anybody who knows the seed can compute the same digest offline. The list of team emails maps back an id seeded by an email. The list of logins maps back an id seeded by a login, for example on GitHub Actions.
 
-The default uses the commit author, because its seed is the git email both in
-CI and on a local run. One developer therefore gets one id everywhere. On GitHub
-Actions the `ci` candidate has no email, so its id is seeded by the account id
-and differs from the commit author id of the same person. Pick one candidate and
-keep it, so that Sentry does not count one developer twice.
+The id counts git identities and CI accounts, not people. On GitHub Actions the
+trigger-er has no email, so the CI id of a developer is seeded by the login,
+and it differs from the local id of the same developer. A developer with two
+email addresses also gets two ids. To count each context on its own, filter the
+Sentry issue by environment: the default environment is `ci` in CI, and
+`NODE_ENV` (else `local`) outside CI.
 
-The id is pseudonymous and not anonymous. The digest carries no name and no
-email, and a party who already holds the list of team emails can still match
-it. Treat the id as personal data under the GDPR, and keep it out of public
-dashboards.
+The id is pseudonymous and not anonymous. The digest is not salted, so a party
+who already holds the list of team emails or logins can match an id to a
+person. Treat the id as personal data under the GDPR, and keep it out of public
+dashboards. Before you upgrade from 1.x, check the change with your privacy
+team: 1.x sent no user by default, and 2.x sends this id by default.
 
 See
 [docs/decisions/0014-identify-callback-pseudonymous-by-default.md](docs/decisions/0014-identify-callback-pseudonymous-by-default.md)
@@ -362,7 +359,7 @@ for the rationale.
 - `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` are respected when not explicitly set.
 - CI metadata auto-detected for GitHub Actions, CircleCI, Buildkite, GitLab, Jenkins.
 - `VITEST_SENTRY_TRIGGER`, `VITEST_SENTRY_ACTOR_TYPE`, `VITEST_SENTRY_ACTOR_NAME` manually pin the `trigger`/`actor_type`/`actor_name` tags.
-- The `identify` option reads the CI trigger-er variables listed above (GitHub/GitLab/CircleCI/Buildkite/Jenkins) for the `ci` candidate, and git and the OS user for the `commitAuthor` candidate.
+- The `identify` option reads the CI trigger-er variables listed above (GitHub/GitLab/CircleCI/Buildkite/Jenkins) in CI, and `git config` and the OS user outside CI.
 
 ### Multi-repo usage
 
