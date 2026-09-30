@@ -18,9 +18,8 @@ export type DetectedIdentity = {
   /** The email address, when the source exposes one. */
   email?: string;
   /**
-   * `dev-` and 16 hex characters of the SHA-256 digest of the key that Sentry
-   * uses to count distinct users: `id:<id>`, else `username:<username>`, else
-   * `email:<email>`.
+   * `dev-` and 16 hex characters of the SHA-256 digest of the email, else the
+   * username, else the account id, trimmed and lowercased.
    */
   pseudonymizedId: string;
 };
@@ -142,26 +141,20 @@ const PSEUDONYM_PREFIX = 'dev-';
 const PSEUDONYM_LENGTH = 16;
 
 /**
- * Keep the detected fields, and add the pseudonymized id. Its seed is the key
- * that Sentry uses to count distinct users (`EventUser.tag_value` in Sentry):
- * `id:<id>`, else `username:<username>`, else `email:<email>`. Two payloads
- * therefore get one pseudonymized id exactly when Sentry counts them as one
- * user. The digest is not salted, so anybody who knows the seed can compute
- * the same id offline.
+ * Keep the detected fields, and add the pseudonymized id. The seed is the
+ * email, else the username, else the account id: the email is the most stable
+ * identifier of one person across machines, and on GitHub Actions the login is
+ * present in every run. The seed is trimmed and lowercased, so one person gets
+ * one pseudonymized id. The digest is not salted, so anybody who knows the
+ * seed can compute the same id offline.
  */
 function toDetectedIdentity(
   user: SentryUser | undefined,
 ): DetectedIdentity | undefined {
-  if (!user) return undefined;
-  const digest = sha256(sentryUserKey(user)).slice(0, PSEUDONYM_LENGTH);
+  const seed = user?.email ?? user?.username ?? user?.id;
+  if (!seed) return undefined;
+  const digest = sha256(seed.trim().toLowerCase()).slice(0, PSEUDONYM_LENGTH);
   return { ...user, pseudonymizedId: `${PSEUDONYM_PREFIX}${digest}` };
-}
-
-/** Every caller passes a cleaned user, so one of the three fields is set. */
-function sentryUserKey({ id, username, email }: SentryUser): string {
-  if (id) return `id:${id}`;
-  if (username) return `username:${username}`;
-  return `email:${email}`;
 }
 
 function sha256(value: string): string {

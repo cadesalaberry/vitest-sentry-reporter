@@ -28,7 +28,7 @@ const PR_OPENER: Person = { name: 'Pat Opener', email: 'pat@acme.test' };
 const GITHUB: Person = { name: 'GitHub', email: 'noreply@github.com' };
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
-const pseudonym = (key: string) => `dev-${sha256(key).slice(0, 16)}`;
+const pseudonym = (seed: string) => `dev-${sha256(seed).slice(0, 16)}`;
 
 let root: string;
 /** Hermetic environment: no system config, and a HOME with the developer's git user. */
@@ -133,13 +133,13 @@ describe('detectIdentities on a real git checkout', () => {
       developer: {
         username: 'Jane Dev',
         email: 'jane@acme.test',
-        pseudonymizedId: pseudonym('username:Jane Dev'),
+        pseudonymizedId: pseudonym('jane@acme.test'),
       },
       // GitHub committed the merge, so its author stands in for it.
       committer: {
         username: PR_OPENER.name,
         email: PR_OPENER.email,
-        pseudonymizedId: pseudonym(`username:${PR_OPENER.name}`),
+        pseudonymizedId: pseudonym(PR_OPENER.email),
       },
     };
     expect(detectIn('shallow')).toEqual(people);

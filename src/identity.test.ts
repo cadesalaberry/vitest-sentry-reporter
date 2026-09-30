@@ -22,8 +22,8 @@ vi.mock('./ci-providers/index.js', () => ci);
 import { detectIdentities } from './identity.js';
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
-/** The pseudonymized id of a Sentry user key such as `id:42`. */
-const pseudonym = (key: string) => `dev-${sha256(key).slice(0, 16)}`;
+/** The pseudonymized id of a seed that is already trimmed and lowercased. */
+const pseudonym = (seed: string) => `dev-${sha256(seed).slice(0, 16)}`;
 
 type Person = { name: string; email: string };
 const JANE: Person = { name: 'Jane Dev', email: 'jane@acme.test' };
@@ -73,32 +73,42 @@ describe('detectIdentities', () => {
     expect(detectIdentities({}).developer).toEqual({
       id: '42',
       username: 'alice',
-      pseudonymizedId: pseudonym('id:42'),
+      pseudonymizedId: pseudonym('alice'),
     });
   });
 
-  it('seeds the pseudonymized id like Sentry counts users: id, then username, then email', () => {
+  it('seeds the pseudonymized id by the email, then the username, then the id', () => {
     inCI({ id: '42', username: 'alice', email: 'a@acme.test' });
     expect(detectIdentities({}).developer?.pseudonymizedId).toBe(
-      pseudonym('id:42'),
+      pseudonym('a@acme.test'),
     );
 
-    inCI({ username: 'alice', email: 'a@acme.test' });
+    inCI({ id: '42', username: 'alice' });
     expect(detectIdentities({}).developer?.pseudonymizedId).toBe(
-      pseudonym('username:alice'),
+      pseudonym('alice'),
     );
 
-    inCI({ email: 'a@acme.test' });
+    inCI({ id: '42' });
     expect(detectIdentities({}).developer?.pseudonymizedId).toBe(
-      pseudonym('email:a@acme.test'),
+      pseudonym('42'),
     );
   });
 
-  it('gives two people two pseudonymized ids', () => {
-    inCI({ id: '42' });
+  it('gives one person one pseudonymized id, and two people two', () => {
+    gitReturns({ name: 'Jane', email: '  Jane@Acme.test ' });
     const first = detectIdentities({}).developer?.pseudonymizedId;
-    inCI({ id: '43' });
+
+    gitReturns({ name: 'Jane', email: 'jane@acme.test' });
+    expect(detectIdentities({}).developer?.pseudonymizedId).toBe(first);
+
+    gitReturns({ name: 'Bob', email: 'bob@acme.test' });
     expect(detectIdentities({}).developer?.pseudonymizedId).not.toBe(first);
+  });
+
+  it('gives a developer and a committer with one email one pseudonymized id', () => {
+    gitReturns({ name: JANE.name, email: JANE.email, committer: JANE });
+    const { developer, committer } = detectIdentities({});
+    expect(developer?.pseudonymizedId).toBe(committer?.pseudonymizedId);
   });
 
   it('picks the CI trigger-er as the developer in CI', () => {
@@ -128,7 +138,7 @@ describe('detectIdentities', () => {
     expect(detectIdentities(env).developer).toEqual({
       username: JANE.name,
       email: JANE.email,
-      pseudonymizedId: pseudonym(`username:${JANE.name}`),
+      pseudonymizedId: pseudonym(JANE.email),
     });
     // git runs with the given environment, so that its config resolves there.
     expect(cp.execFileSync).toHaveBeenCalledWith(
@@ -151,7 +161,7 @@ describe('detectIdentities', () => {
     gitReturns({});
     expect(detectIdentities({}).developer).toEqual({
       username: 'os-user',
-      pseudonymizedId: pseudonym('username:os-user'),
+      pseudonymizedId: pseudonym('os-user'),
     });
   });
 
@@ -166,7 +176,7 @@ describe('detectIdentities', () => {
         committer: {
           username: JANE.name,
           email: JANE.email,
-          pseudonymizedId: pseudonym(`username:${JANE.name}`),
+          pseudonymizedId: pseudonym(JANE.email),
         },
       });
     }

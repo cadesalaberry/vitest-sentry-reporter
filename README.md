@@ -298,16 +298,15 @@ A manual `triggered_by` in `tags`/`getTags` overrides the detected one. The
 #### The pseudonymized id
 
 `pseudonymizedId` is `dev-` and the first 16 hex characters of the SHA-256
-digest of the key that Sentry uses to count distinct users: `id:<id>`, else
-`username:<username>`, else `email:<email>`. Two payloads get one pseudonymized
-id exactly when Sentry counts them as one user.
+digest of the email, else the username, else the account id. The seed is
+trimmed and lowercased, so one person gets one id, and a developer and a
+committer with one email share it.
 
-The digest is not salted. Anybody who knows the key, for example from a list of
-team logins or account ids, can compute the same id. Treat the id as personal
+The digest is not salted. Anybody who knows the seed, for example from a list
+of team emails or logins, can compute the same id. Treat the id as personal
 data under the GDPR, and keep it out of public dashboards. One person can get
-two ids, for example from a GitHub account id in CI and from a git name
-locally. To count each context on its own, filter the Sentry issue by
-environment.
+two ids, for example from a GitHub login in CI and from a git email locally. To
+count each context on its own, filter the Sentry issue by environment.
 
 See
 [docs/decisions/0014-identify-callback-pseudonymous-by-default.md](docs/decisions/0014-identify-callback-pseudonymous-by-default.md)

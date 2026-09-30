@@ -66,9 +66,8 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
   depend on the checkout depth.
 - Each candidate keeps the `id`, `username` and `email` that the source
   exposes. `pseudonymizedId` is `dev-` and 16 hex characters of the SHA-256
-  digest of the key that Sentry uses to count distinct users: `id:<id>`, else
-  `username:<username>`, else `email:<email>` (`EventUser.tag_value` in
-  Sentry).
+  digest of the email, else the username, else the account id, trimmed and
+  lowercased.
 - The default sends `{ id: pseudonymizedId }` of `developer`, else of
   `committer`. A run that a bot triggers, for example a merge queue, therefore
   counts the person behind the change.
@@ -92,17 +91,14 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
 - The release notes must say that 2.0 sends a Sentry user by default, and that
   it runs `git log -1`, and `git config` outside CI, on the first failure. By
   default, 1.5.0 sent no user and ran no git command.
-- Two payloads get one pseudonymized id exactly when Sentry counts them as one
-  user, so the count matches what Sentry computes on raw data.
-- One person can get two ids: a GitHub account id in CI and a git name
-  locally, or two git names. A filter on the Sentry environment counts each
-  context on its own.
-- A local seed is often the git name, because a git user has no account id.
-  Two people with the same git name get one id.
+- A developer and a committer with one email get one pseudonymized id.
+- One person can get two ids: a GitHub login in CI and a git email locally, or
+  two emails. A filter on the Sentry environment counts each context on its
+  own.
 - The callback receives the raw fields. A function that returns them sends
   them, for example the public GitHub account id.
-- The digest is unsalted, so a party who holds the list of logins, ids or
-  names can match an id to a person. Treat the id as personal data under the
+- The digest is unsalted, so a party who holds the list of team emails or
+  logins can match an id to a person. Treat the id as personal data under the
   GDPR.
 
 ## Alternatives considered
@@ -122,11 +118,12 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
   code, and the metric counts who ran the tests. It stays the fallback.
 - **Replace the raw `id` with the pseudonym.** The third draft. Rejected in
   review, because the callback lost the account id.
-- **Seed by the email first.** The third draft. Rejected in review, because the
-  count then differs from the Sentry count on raw data.
+- **Seed by the key that Sentry uses to count users** (`id`, else `username`,
+  else `email`, from `EventUser.tag_value`). Tried after review, then dropped
+  by the owner. A local seed would be the git name, which is less precise than
+  the git email.
 - **`GITHUB_TRIGGERING_ACTOR`, with the id only when it is `GITHUB_ACTOR`.**
-  Rejected. A re-run by another person loses the id, and that person gets a
-  second pseudonymized id.
+  Rejected in review. A re-run by another person loses the account id.
 - **Keep `getUser` next to `identify`.** Rejected. Two callbacks return the
   same user with a precedence rule.
 - **Keep the feature off by default.** Rejected. An off-by-default metric stays
@@ -137,7 +134,8 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
 
 ## Tests
 
-`src/identity.test.ts` covers the Sentry key order, the raw fields, the CI
+`src/identity.test.ts` covers the seed order and its normalization, the raw
+fields, one id for a developer and a committer with one email, the CI
 trigger-er, a CI without a trigger-er, the git user, the OS user fallback, the
 committer and its author fallback, the exclusion of GitHub, bots and AI agents,
 and the case where nothing resolves. `src/identity.git.test.ts` runs a real git
@@ -156,7 +154,7 @@ keys, the manual `triggered_by` tag, and the single detection per run.
 - [Sentry user documentation](https://docs.sentry.io/platforms/javascript/enriching-events/identify-user/)
 - `EventUser.tag_value` in
   [getsentry/sentry `src/sentry/utils/eventuser.py`](https://github.com/getsentry/sentry/blob/master/src/sentry/utils/eventuser.py):
-  the key that counts distinct users.
+  how Sentry counts distinct users.
 - GDPR [Article 4(5)](https://gdpr-info.eu/art-4-gdpr/) and
   [Recital 26](https://gdpr-info.eu/recitals/no-26/): pseudonymised data is
   personal data.
