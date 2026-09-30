@@ -1,12 +1,12 @@
 ---
-title: Pick the Sentry user with an identify callback, pseudonymous by default
+title: Pick the Sentry user with a getUser callback, pseudonymous by default
 status: accepted
 date: 2026-09-30
 authors:
   - cadesalaberry
 ---
 
-# Pick the Sentry user with an identify callback, pseudonymous by default
+# Pick the Sentry user with a getUser callback, pseudonymous by default
 
 ## Context
 
@@ -34,7 +34,7 @@ That surface has four problems.
    local run the identity is usually a username alone, so `hash: true` changes
    nothing.
 
-A second callback, `getUser(ctx)`, also returns the Sentry user. It runs for
+A second option, `getUser(ctx)`, also returns the Sentry user. It runs for
 each failure and wins over `identity`. Two options set one field, with a
 precedence rule between them.
 
@@ -44,11 +44,12 @@ break the API freely.
 
 ## Decision
 
-Replace `identity` and `getUser` with one callback, and detect two people for
-it.
+Replace `identity` with one callback, `getUser`, and pass it two detected
+people before the failure context. The name matches `getTags` and
+`getFingerprint`.
 
 ```ts
-identify?:
+getUser?:
   | ((detected: DetectedIdentities, ctx: FailureContext) => SentryUser | undefined)
   | false;
 
@@ -76,7 +77,7 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
 - `false` skips the detection, the Sentry user and the `triggered_by` tag. A
   callback that throws, or that returns a truthy value that is not a Sentry
   user, sends the failure with no user and logs one warning. A leftover 1.5.0
-  `identity` or `getUser` key logs one warning.
+  `identity` key logs one warning.
 - The GitHub Actions provider pairs `GITHUB_ACTOR` with `GITHUB_ACTOR_ID`, so
   the username and the id always describe one account. A re-run keeps the
   original actor, because GitHub exposes no id for `GITHUB_TRIGGERING_ACTOR`.
@@ -124,8 +125,12 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
   the git email.
 - **`GITHUB_TRIGGERING_ACTOR`, with the id only when it is `GITHUB_ACTOR`.**
   Rejected in review. A re-run by another person loses the account id.
-- **Keep `getUser` next to `identify`.** Rejected. Two callbacks return the
-  same user with a precedence rule.
+- **A separate `identify` callback next to `getUser`.** A draft of this
+  decision. Rejected. Two callbacks return the same user with a precedence
+  rule.
+- **`getUser(ctx, detected)`, with the context first like `getTags`.**
+  Rejected. Most functions read only the detected people, so the detection
+  comes first.
 - **Keep the feature off by default.** Rejected. An off-by-default metric stays
   empty.
 - **Salt the digest, send a random id per run, or send the full digest.**

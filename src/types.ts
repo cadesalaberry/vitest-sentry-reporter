@@ -5,8 +5,8 @@ export type Primitive = string | number | boolean | null | undefined;
 
 /**
  * Minimal Sentry user shape, used both for `scope.setUser` (which drives
- * Sentry's "users affected" metric) and as the return type of the `identify`
- * callback ({@link VitestSentryReporterOptions.identify}).
+ * Sentry's "users affected" metric) and as the return type of the `getUser`
+ * callback ({@link VitestSentryReporterOptions.getUser}).
  */
 export type SentryUser = {
   id?: string;
@@ -78,7 +78,7 @@ export type VitestSentryReporterOptions = {
    * `committer`. The pseudonymized id is still personal data. Set `false` to
    * send no user. See the README section "Who triggered the run".
    */
-  identify?:
+  getUser?:
     | ((
         detected: DetectedIdentities,
         ctx: FailureContext,

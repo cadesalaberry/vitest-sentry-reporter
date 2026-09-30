@@ -30,11 +30,11 @@ import {
 } from './utils.js';
 
 /**
- * The default `identify`: the pseudonymized id of the developer, else of the
+ * The default `getUser`: the pseudonymized id of the developer, else of the
  * latest committer, so a run that a bot triggers still counts the person
  * behind the change.
  */
-function defaultIdentify({
+function defaultGetUser({
   developer,
   committer,
 }: DetectedIdentities): SentryUser | undefined {
@@ -44,8 +44,7 @@ function defaultIdentify({
 
 /** 1.5.0 options that no longer exist, and what replaces each one. */
 const REMOVED_OPTIONS: Readonly<Record<string, string>> = {
-  identity: 'identify',
-  getUser: 'identify(detected, ctx)',
+  identity: 'getUser',
 };
 
 /** Sentry needs an id, a username or an email to count a user. */
@@ -72,7 +71,7 @@ export class VitestSentryReporter implements Reporter {
   private maxEventsPerRun?: number;
   private codeownersEnabled: boolean;
   private codeownersRoot?: string;
-  private identify?: (
+  private getUser?: (
     detected: DetectedIdentities,
     ctx: FailureContext,
   ) => SentryUser | undefined;
@@ -102,13 +101,13 @@ export class VitestSentryReporter implements Reporter {
     // `false` turns identity off. Any other value that is not a function falls
     // back to the default, so an unexpected value never sends more than a
     // pseudonym.
-    const identify = options.identify;
-    this.identify =
-      identify === false
+    const getUser = options.getUser;
+    this.getUser =
+      getUser === false
         ? undefined
-        : typeof identify === 'function'
-          ? identify
-          : defaultIdentify;
+        : typeof getUser === 'function'
+          ? getUser
+          : defaultGetUser;
     this.warned = new Set<string>();
 
     // A JavaScript config can still carry a 1.5.0 key. Say once that it has
@@ -347,21 +346,21 @@ export class VitestSentryReporter implements Reporter {
   }
 
   /**
-   * The user that `identify` picks for one failure, or `undefined` when
-   * `identify` is `false`, returns nothing, returns a value that is not a
+   * The user that `getUser` picks for one failure, or `undefined` when
+   * `getUser` is `false`, returns nothing, returns a value that is not a
    * Sentry user, or throws. The detection runs once, on the first failure,
    * since the developer behind a run does not change during the run.
    */
   private resolveUser(ctx: FailureContext): SentryUser | undefined {
-    if (!this.identify) return undefined;
+    if (!this.getUser) return undefined;
     this.detected ??= detectIdentities(process.env);
     let user: unknown;
     try {
-      user = this.identify(this.detected, ctx);
+      user = this.getUser(this.detected, ctx);
     } catch (error) {
       // A broken callback costs the Sentry user, never the failure event.
       this.warnOnce(
-        'identify threw an error. The reporter sends the failure without a user.',
+        'getUser threw an error. The reporter sends the failure without a user.',
         error,
       );
       return undefined;
@@ -369,7 +368,7 @@ export class VitestSentryReporter implements Reporter {
     if (!user) return undefined;
     if (isSentryUser(user)) return user;
     this.warnOnce(
-      `identify returned ${describeValue(user)}, and not a Sentry user with an id, a username or an email. The reporter sends the failure without a user.`,
+      `getUser returned ${describeValue(user)}, and not a Sentry user with an id, a username or an email. The reporter sends the failure without a user.`,
     );
     return undefined;
   }

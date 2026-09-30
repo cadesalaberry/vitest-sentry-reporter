@@ -478,7 +478,7 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     const reporter = new VitestSentryReporter({
       dsn: DSN,
       getFingerprint: () => ['custom', 'fingerprint'],
-      identify: () => ({ id: 'user-1' }),
+      getUser: () => ({ id: 'user-1' }),
     });
     const failed = makeTestCase({ id: 't1' });
 
@@ -744,17 +744,17 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     expect(scope.setTags.mock.calls[0][0]).not.toHaveProperty('triggered_by');
   });
 
-  it('passes the detection and the failure context to identify', async () => {
+  it('passes the detection and the failure context to getUser', async () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
-    const identify = vi.fn(({ developer }: DetectedIdentities) =>
+    const getUser = vi.fn(({ developer }: DetectedIdentities) =>
       developer
         ? { id: developer.pseudonymizedId, username: developer.username }
         : undefined,
     );
 
-    const scope = await reportOneFailure({ identify });
+    const scope = await reportOneFailure({ getUser });
 
-    expect(identify).toHaveBeenCalledWith(
+    expect(getUser).toHaveBeenCalledWith(
       DETECTED,
       expect.objectContaining({ testName: 't1' }),
     );
@@ -767,11 +767,11 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     );
   });
 
-  it('sends the email only when identify returns it', async () => {
+  it('sends the email only when getUser returns it', async () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
 
     const scope = await reportOneFailure({
-      identify: ({ developer: d }) =>
+      getUser: ({ developer: d }) =>
         d && { id: d.pseudonymizedId, email: d.email },
     });
 
@@ -781,24 +781,24 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     });
   });
 
-  it('lets identify pick a different user for each failure', async () => {
+  it('lets getUser pick a different user for each failure', async () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
-    const identify = vi.fn(
+    const getUser = vi.fn(
       (_detected: DetectedIdentities, ctx: { testName: string }) =>
         ctx.testName === 't1' ? { id: 'team-payments' } : undefined,
     );
 
-    const [first, second] = await reportFailures({ identify }, 2);
+    const [first, second] = await reportFailures({ getUser }, 2);
 
     expect(first?.setUser).toHaveBeenCalledWith({ id: 'team-payments' });
     expect(second?.setUser).not.toHaveBeenCalled();
-    expect(identify).toHaveBeenCalledTimes(2);
+    expect(getUser).toHaveBeenCalledTimes(2);
   });
 
-  it('skips detection and sends no user when identify is false', async () => {
+  it('skips detection and sends no user when getUser is false', async () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
 
-    const scope = await reportOneFailure({ identify: false });
+    const scope = await reportOneFailure({ getUser: false });
 
     expect(identity.detectIdentities).not.toHaveBeenCalled();
     expect(scope.setUser).not.toHaveBeenCalled();
@@ -810,17 +810,17 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
 
     // A JavaScript config can carry any value. The type rejects this one.
     const scope = await reportOneFailure({
-      identify: true,
+      getUser: true,
     } as unknown as Options);
 
     expect(scope.setUser).toHaveBeenCalledWith({ id: 'dev-a0a0a0a0a0a0a0a0' });
   });
 
-  it('sends no user, and logs nothing, when identify returns undefined', async () => {
+  it('sends no user, and logs nothing, when getUser returns undefined', async () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
     const warn = captureWarnings();
 
-    const scope = await reportOneFailure({ identify: () => undefined });
+    const scope = await reportOneFailure({ getUser: () => undefined });
 
     expect(scope.setUser).not.toHaveBeenCalled();
     expect(scope.setTags.mock.calls[0][0]).not.toHaveProperty('triggered_by');
@@ -828,15 +828,15 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     warn.mockRestore();
   });
 
-  it('warns once when identify returns a value that is not a Sentry user', async () => {
+  it('warns once when getUser returns a value that is not a Sentry user', async () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
     const warn = captureWarnings();
 
     // In JavaScript, `({ developer }) => developer?.pseudonymizedId` returns a string.
     const scopes = await reportFailures(
       {
-        identify: (({ developer }: DetectedIdentities) =>
-          developer?.pseudonymizedId) as unknown as Options['identify'],
+        getUser: (({ developer }: DetectedIdentities) =>
+          developer?.pseudonymizedId) as unknown as Options['getUser'],
       },
       2,
     );
@@ -844,15 +844,15 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     expect(sentry.captureException).toHaveBeenCalledTimes(2);
     for (const scope of scopes) expect(scope.setUser).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toContain('identify returned a string');
+    expect(warn.mock.calls[0][0]).toContain('getUser returned a string');
     warn.mockRestore();
   });
 
-  it('warns when identify returns an object without an id, a username or an email', async () => {
+  it('warns when getUser returns an object without an id, a username or an email', async () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
     const warn = captureWarnings();
 
-    const scope = await reportOneFailure({ identify: () => ({}) });
+    const scope = await reportOneFailure({ getUser: () => ({}) });
 
     expect(scope.setUser).not.toHaveBeenCalled();
     expect(warn.mock.calls[0][0]).toContain(
@@ -861,12 +861,12 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     warn.mockRestore();
   });
 
-  it('still reports every failure, with no user, when identify throws', async () => {
+  it('still reports every failure, with no user, when getUser throws', async () => {
     const warn = captureWarnings();
 
     const scopes = await reportFailures(
       {
-        identify: ({ developer }) => ({ id: (developer as { id: string }).id }),
+        getUser: ({ developer }) => ({ id: (developer as { id: string }).id }),
       },
       2,
     );
@@ -874,24 +874,25 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     expect(sentry.captureException).toHaveBeenCalledTimes(2);
     for (const scope of scopes) expect(scope.setUser).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toContain('identify threw an error');
+    expect(warn.mock.calls[0][0]).toContain('getUser threw an error');
     warn.mockRestore();
   });
 
-  it.each([
-    ['identity', { includeEmail: true }, '"identify"'],
-    ['getUser', () => ({ id: 'explicit' }), '"identify(detected, ctx)"'],
-  ])('warns once that the 1.5.0 %s option has no effect', async (key, value, replacement) => {
+  it('warns once that the 1.5.0 identity option has no effect', async () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
     const warn = captureWarnings();
 
-    const scope = await reportOneFailure({ [key]: value } as Options);
+    const scope = await reportOneFailure({
+      identity: { includeEmail: true },
+    } as Options);
 
     // The leftover key changes nothing: the default still sends the pseudonym.
     expect(scope.setUser).toHaveBeenCalledWith({ id: 'dev-a0a0a0a0a0a0a0a0' });
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toContain(`"${key}" option no longer exists`);
-    expect(warn.mock.calls[0][0]).toContain(replacement);
+    expect(warn.mock.calls[0][0]).toContain(
+      '"identity" option no longer exists',
+    );
+    expect(warn.mock.calls[0][0]).toContain('Use "getUser" instead');
     warn.mockRestore();
   });
 
@@ -907,16 +908,16 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     );
   });
 
-  it('detects the developer once per run, and calls identify per failure', async () => {
+  it('detects the developer once per run, and calls getUser per failure', async () => {
     identity.detectIdentities.mockReturnValue(DETECTED);
-    const identify = vi.fn(({ developer }: DetectedIdentities) =>
+    const getUser = vi.fn(({ developer }: DetectedIdentities) =>
       developer ? { id: developer.pseudonymizedId } : undefined,
     );
 
-    await reportFailures({ identify }, 3);
+    await reportFailures({ getUser }, 3);
 
     expect(sentry.captureException).toHaveBeenCalledTimes(3);
     expect(identity.detectIdentities).toHaveBeenCalledTimes(1);
-    expect(identify).toHaveBeenCalledTimes(3);
+    expect(getUser).toHaveBeenCalledTimes(3);
   });
 });

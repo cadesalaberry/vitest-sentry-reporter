@@ -119,7 +119,7 @@ export default defineConfig({
         // per developer. The function below is the default: one
         // pseudonymized id, no name and no email. The second argument is
         // the failure context. Set `false` to send no user.
-        identify: ({ developer, committer }) => {
+        getUser: ({ developer, committer }) => {
           const person = developer ?? committer;
           return person && { id: person.pseudonymizedId };
         },
@@ -168,15 +168,15 @@ export default defineConfig({
 ```
 
 The `ctx` passed to `shouldReport`, `getTags`, `getFingerprint` and
-`beforeSend`, and the second argument of `identify`, is the failure context. It carries `testName`, `fullTitle`,
+`beforeSend`, and the second argument of `getUser`, is the failure context. It carries `testName`, `fullTitle`,
 `suitePath`, `filePath`, `relativeFilePath`, `message`, `stack`, `error`,
 `durationMs`, `retry`, `flaky`, `logs` and `meta`.
 
 ### What gets reported
 
 - **Error**: The thrown error from the failed test (or synthesized from message).
-- **Tags**: `test_file` (repo-relative path, see below), `test_name`, `test_full_title`, `test_project` (Vitest project/workspace name, handy for monorepos), `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `job_name` (CI job/step/shard name), `repository`, `branch`, `commit_sha`, `run_url` (link to the CI run/build, when detected), plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus `triggered_by` when `identify` returns a user, plus any custom tags.
-- **User**: the user that `identify` picks, which powers Sentry's "users affected" metric. By default, the pseudonymized id of the developer who ran the tests, else of the latest committer (see below).
+- **Tags**: `test_file` (repo-relative path, see below), `test_name`, `test_full_title`, `test_project` (Vitest project/workspace name, handy for monorepos), `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `job_name` (CI job/step/shard name), `repository`, `branch`, `commit_sha`, `run_url` (link to the CI run/build, when detected), plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus `triggered_by` when `getUser` returns a user, plus any custom tags.
+- **User**: the user that `getUser` picks, which powers Sentry's "users affected" metric. By default, the pseudonymized id of the developer who ran the tests, else of the latest committer (see below).
 - **Extras**: `duration_ms`, `logs`, `suite_path`, `vitest_version`, minimal CI env snapshot.
 - **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky; in CI, a `ci` context with direct triage links — `pull_request_url`, `run_url`, `commit_url`, and `workflow_id` — for whichever the detected provider exposes. Sentry renders these URLs as clickable links, so the failing run, pull request and commit are one click from the issue.
 - **Fingerprint**: Defaults to `['vitest-failure', repoRelativeFile, testName]`; override with `getFingerprint`.
@@ -238,7 +238,7 @@ The same three tags can also be pinned from the reporter options (`tags` or
 
 ### Who triggered the run (identity / "users affected")
 
-The `identify` option sets Sentry's **user** for each failure. Sentry counts
+The `getUser` option sets Sentry's **user** for each failure. Sentry counts
 distinct users, so its "N users affected" metric ranks each failed test by the
 number of developers that it affects. A searchable `triggered_by` tag carries
 the username, else the id.
@@ -249,7 +249,7 @@ no name and no email. That id is still personal data under the GDPR.
 ```ts
 new VitestSentryReporter({
   // The default.
-  identify: ({ developer, committer }) => {
+  getUser: ({ developer, committer }) => {
     const person = developer ?? committer;
     return person && { id: person.pseudonymizedId };
   },
@@ -268,7 +268,7 @@ always a `pseudonymizedId`. `id`, `username` and `email` are personal data, and
 they reach Sentry only when your function returns them. On GitHub Actions, `id`
 is the numeric GitHub account id.
 
-| To send                               | `identify`                                                                                     |
+| To send                               | `getUser`                                                                                     |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | The pseudonymized id only (default)   | The function above                                                                             |
 | The pseudonymized id and the name     | `({ developer: d }) => d && { id: d.pseudonymizedId, username: d.username }`                   |
@@ -309,7 +309,7 @@ two ids, for example from a GitHub login in CI and from a git email locally. To
 count each context on its own, filter the Sentry issue by environment.
 
 See
-[docs/decisions/0014-identify-callback-pseudonymous-by-default.md](docs/decisions/0014-identify-callback-pseudonymous-by-default.md)
+[docs/decisions/0014-get-user-callback-pseudonymous-by-default.md](docs/decisions/0014-get-user-callback-pseudonymous-by-default.md)
 for the rationale and the rejected alternatives.
 
 ### Code ownership tags (CODEOWNERS)
@@ -353,7 +353,7 @@ for the rationale.
 - `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` are respected when not explicitly set.
 - CI metadata auto-detected for GitHub Actions, CircleCI, Buildkite, GitLab, Jenkins.
 - `VITEST_SENTRY_TRIGGER`, `VITEST_SENTRY_ACTOR_TYPE`, `VITEST_SENTRY_ACTOR_NAME` manually pin the `trigger`/`actor_type`/`actor_name` tags.
-- The `identify` option reads the CI trigger-er variables listed above (GitHub/GitLab/CircleCI/Buildkite/Jenkins) in CI, `git config` and the OS user outside CI, and `git log -1` for the committer.
+- The `getUser` option reads the CI trigger-er variables listed above (GitHub/GitLab/CircleCI/Buildkite/Jenkins) in CI, `git config` and the OS user outside CI, and `git log -1` for the committer.
 
 ### Multi-repo usage
 

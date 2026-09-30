@@ -41,7 +41,7 @@ export type DetectedIdentities = {
 };
 
 /**
- * Detect the people behind the current test run, for the `identify` option.
+ * Detect the people behind the current test run, for the `getUser` option.
  *
  * `developer` comes from the CI provider in CI (see {@link detectProvider}),
  * and from `git config`, else the OS user, outside CI. `committer` comes from

@@ -24,7 +24,7 @@ This directory contains Architectural Decision Records using MADR (Markdown Arch
 | [0011](0011-make-release-workflow-fork-reusable.md) | Make the release workflow reusable by forks (token / Azure Artifacts publishing) | accepted | 2026-07-06 |
 | [0012](0012-fork-publishing-by-rebase.md) | Run release-please only upstream and publish forks by rebase | accepted | 2026-07-24 |
 | [0013](0013-derive-published-package-name-from-repository.md) | Require published package identity as configuration, not a commit | accepted | 2026-08-14 |
-| [0014](0014-identify-callback-pseudonymous-by-default.md) | Pick the Sentry user with an identify callback, pseudonymous by default | accepted | 2026-09-30 |
+| [0014](0014-get-user-callback-pseudonymous-by-default.md) | Pick the Sentry user with a getUser callback, pseudonymous by default | accepted | 2026-09-30 |
 
 ADRs are numbered sequentially in the chronological order in which they were decided.
 
