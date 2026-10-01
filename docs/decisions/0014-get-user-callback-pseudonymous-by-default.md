@@ -73,8 +73,9 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
   digest of the email, else the username, else the account id, trimmed and
   lowercased.
 - The default sends `{ id: pseudonymizedId }` of `developer`, else of
-  `committer`. A run that a bot triggers, for example a merge queue, therefore
-  counts the person behind the change.
+  `committer`. A run that a bot triggers, for example a merge queue, then
+  counts the person behind the change, if `HEAD` has a committer or an author
+  that is not GitHub, a bot or an AI agent. Else the default sends no user.
 - The reporter detects the people once per run, on the first failure. It calls
   the callback for each failure, with the failure context and the detection.
   `committer` runs `git log -1` on its first read, and the default reads it
@@ -104,6 +105,9 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
   finds no developer. By default, 1.5.0 sent no user and ran no git command.
 - `triggered_by` carries the committer when the default falls back to it. The
   `user_source` tag tells this case apart.
+- On a scheduled GitHub run, `developer` is the person who last changed the
+  `cron` schedule or the default branch, because GitHub makes that person the
+  actor of the run.
 - A developer and a committer with one email get one pseudonymized id.
 - One person can get two ids: a GitHub login in CI and a git email locally, or
   two emails. A filter on the Sentry environment counts each context on its

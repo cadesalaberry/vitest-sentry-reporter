@@ -110,7 +110,7 @@ describe('detectIdentities', () => {
     );
   });
 
-  it('gives one person one pseudonymized id, and two people two', () => {
+  it('gives one seed one pseudonymized id, and another seed another', () => {
     gitReturns({ name: 'Jane', email: '  Jane@Acme.test ' });
     const first = detectIdentities({}).developer?.pseudonymizedId;
 

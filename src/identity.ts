@@ -156,9 +156,9 @@ const PSEUDONYM_LENGTH = 16;
  * Keep the detected fields, and add the pseudonymized id. The seed is the
  * email, else the username, else the account id: the email is the most stable
  * identifier of one person across machines, and on GitHub Actions the login is
- * present in every run. The seed is trimmed and lowercased, so one person gets
- * one pseudonymized id. The digest is not salted, so anybody who knows the
- * seed can compute the same id offline.
+ * present in every run. The seed is trimmed and lowercased, so one seed always
+ * gives one pseudonymized id. The digest is not salted, so anybody who knows
+ * the seed can compute the same id offline.
  */
 function toDetectedIdentity(
   user: SentryUser | undefined,

@@ -35,7 +35,7 @@ import {
 
 /**
  * The default `getUser`: the pseudonymized id of the developer, else of the
- * latest committer, so a run that a bot triggers still counts the person
+ * latest committer, so a run that a bot triggers can still count the person
  * behind the change. It reads `committer` only when there is no developer,
  * because the first read runs `git log`.
  */

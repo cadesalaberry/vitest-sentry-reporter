@@ -292,7 +292,7 @@ each candidate. A user that matches neither candidate gets no `user_source`.
 
 #### How the people are detected
 
-- **`developer` in CI**: the account that triggered the run, per provider: GitHub `GITHUB_TRIGGERING_ACTOR`, else `GITHUB_ACTOR`, with `GITHUB_ACTOR_ID` when both name one account, GitLab `GITLAB_USER_*`, CircleCI `CIRCLE_USERNAME`, Buildkite `BUILDKITE_BUILD_CREATOR*`, Jenkins `CHANGE_AUTHOR*`/`BUILD_USER*`. On a GitHub re-run, the developer is the person who started the re-run. A CI that exposes no trigger-er, for example a bare `CI=true`, gives no developer.
+- **`developer` in CI**: the account that triggered the run, per provider: GitHub `GITHUB_TRIGGERING_ACTOR`, else `GITHUB_ACTOR`, with `GITHUB_ACTOR_ID` when both name one account, GitLab `GITLAB_USER_*`, CircleCI `CIRCLE_USERNAME`, Buildkite `BUILDKITE_BUILD_CREATOR*`, Jenkins `CHANGE_AUTHOR*`/`BUILD_USER*`. On a GitHub re-run, the developer is the person who started the re-run. On a scheduled GitHub run, the account is the person who last changed the `cron` schedule or the default branch. That person did not start the run. A CI that exposes no trigger-er, for example a bare `CI=true`, gives no developer.
 - **`developer` outside CI**: `git config user.name` and `user.email`, else the OS username.
 - **`committer`**: `git log -1` on `HEAD`, when your function reads `committer` for the first time. The default reads it only when there is no developer. GitHub is the committer of every commit merged on github.com, so the reporter then uses the author. `HEAD` carries its own metadata, so the result does not depend on the checkout depth.
 
@@ -310,8 +310,8 @@ detected one. The `detectIdentities` helper is exported for reuse.
 
 `pseudonymizedId` is `dev-` and the first 16 hex characters of the SHA-256
 digest of the email, else the username, else the account id. The seed is
-trimmed and lowercased, so one person gets one id, and a developer and a
-committer with one email share it.
+trimmed and lowercased, so one seed always gives one id, whatever its case and
+its spaces. A developer and a committer with one email share it.
 
 The digest is not salted. Anybody who knows the seed, for example from a list
 of team emails or logins, can compute the same id. Treat the id as personal
