@@ -23,7 +23,7 @@ vi.mock('./actor-detectors/index.js', async (importOriginal) => ({
 const ci = vi.hoisted(() => ({ detectProvider: vi.fn(() => undefined) }));
 vi.mock('./ci-providers/index.js', () => ci);
 
-import { detectIdentities } from './identity.js';
+import { detectIdentities, isResolved } from './identity.js';
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
 /** The pseudonymized id of a seed that is already trimmed and lowercased. */
@@ -140,10 +140,10 @@ describe('detectIdentities', () => {
   it('detects no developer in a CI that exposes no trigger-er', () => {
     inCI(undefined);
     gitReturns({ name: 'CI Machine', email: 'ci@acme.test' });
-    expect(detectIdentities({})).not.toHaveProperty('developer');
+    expect(detectIdentities({}).developer).toBeUndefined();
 
     inCI({ username: '' });
-    expect(detectIdentities({})).not.toHaveProperty('developer');
+    expect(detectIdentities({}).developer).toBeUndefined();
     expect(osMock.userInfo).not.toHaveBeenCalled();
   });
 
@@ -168,11 +168,11 @@ describe('detectIdentities', () => {
     // For example a sandbox that commits as the agent, with no AI marker set.
     for (const agent of AGENTS) {
       gitReturns({ name: agent.name, email: agent.email });
-      expect(detectIdentities({})).not.toHaveProperty('developer');
+      expect(detectIdentities({}).developer).toBeUndefined();
     }
 
     inCI({ username: 'renovate[bot]' });
-    expect(detectIdentities({})).not.toHaveProperty('developer');
+    expect(detectIdentities({}).developer).toBeUndefined();
   });
 
   it('falls back to the OS username when git has no user', () => {
@@ -209,6 +209,19 @@ describe('detectIdentities', () => {
     ]);
   });
 
+  it('runs no detection and no git command until a field is read', () => {
+    gitReturns({ name: JANE.name, email: JANE.email, committer: JANE });
+    const detected = detectIdentities({});
+    expect(actor.detectActor).not.toHaveBeenCalled();
+    expect(cp.execFileSync).not.toHaveBeenCalled();
+    expect(isResolved(detected, 'developer')).toBe(false);
+
+    expect(detected.developer?.email).toBe(JANE.email);
+    expect(isResolved(detected, 'developer')).toBe(true);
+    expect(isResolved(detected, 'committer')).toBe(false);
+    expect(gitLogCalls()).toHaveLength(0);
+  });
+
   it('runs git log on the first read of the committer only', () => {
     gitReturns({ name: JANE.name, email: JANE.email, committer: JANE });
     const detected = detectIdentities({});
@@ -218,6 +231,23 @@ describe('detectIdentities', () => {
     expect(detected.committer?.email).toBe(JANE.email);
     expect(detected.committer?.email).toBe(JANE.email);
     expect(gitLogCalls()).toHaveLength(1);
+    expect(isResolved(detected, 'committer')).toBe(true);
+  });
+
+  it('lets a caller assign a field, with no detection', () => {
+    gitReturns({ committer: JANE });
+    const detected = detectIdentities({});
+
+    detected.committer = undefined;
+
+    expect(detected.committer).toBeUndefined();
+    expect(isResolved(detected, 'committer')).toBe(true);
+    expect(gitLogCalls()).toHaveLength(0);
+  });
+
+  it('treats a field of a plain object as resolved', () => {
+    expect(isResolved({}, 'committer')).toBe(true);
+    expect(isResolved({ developer: undefined }, 'developer')).toBe(true);
   });
 
   it('uses the author when GitHub is the committer', () => {

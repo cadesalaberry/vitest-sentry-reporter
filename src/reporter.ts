@@ -13,6 +13,7 @@ import {
   type DetectedIdentities,
   type DetectedIdentity,
   detectIdentities,
+  isResolved,
 } from './identity.js';
 import type {
   FailureContext,
@@ -47,8 +48,25 @@ function defaultGetUser(
   return person ? { id: person.pseudonymizedId } : undefined;
 }
 
-/** The detected person that a Sentry user stands for. */
-type UserSource = 'developer' | 'committer';
+/** The detected people that a Sentry user can stand for, in priority order. */
+const USER_SOURCES = ['developer', 'committer'] as const;
+type UserSource = (typeof USER_SOURCES)[number];
+
+/**
+ * Which detected person `user` stands for, for the `user_source` tag. It
+ * compares the fields, so it also works for a custom `getUser`. It compares
+ * only with the people that `getUser` read: a user cannot come from another
+ * one, and a new read would run git only for a tag.
+ */
+function userSource(
+  user: SentryUser,
+  detected: DetectedIdentities,
+): UserSource | undefined {
+  return USER_SOURCES.find(
+    (source) =>
+      isResolved(detected, source) && isSamePerson(user, detected[source]),
+  );
+}
 
 /** True when a field of `user` is a field of `person`. */
 function isSamePerson(
@@ -221,11 +239,12 @@ export class VitestSentryReporter implements Reporter {
         ? { code_owners: owners.join(','), code_owner: owners[0] }
         : {};
     // The Sentry user for this failure, and its searchable counterparts.
-    const user = this.resolveUser(ctx);
-    const identityTags: Record<string, Primitive> = user
+    const resolved = this.resolveUser(ctx);
+    const user = resolved?.user;
+    const identityTags: Record<string, Primitive> = resolved
       ? {
-          triggered_by: user.username || user.id,
-          user_source: this.userSource(user),
+          triggered_by: resolved.user.username || resolved.user.id,
+          user_source: resolved.source,
         }
       : {};
     const mergedTags = {
@@ -373,17 +392,22 @@ export class VitestSentryReporter implements Reporter {
   }
 
   /**
-   * The user that `getUser` picks for one failure, or `undefined` when
-   * `getUser` is `false`, returns nothing, returns a value that is not a
-   * Sentry user, or throws. The detection runs once, on the first failure,
-   * since the developer behind a run does not change during the run.
+   * The user that `getUser` picks for one failure, and the detected person
+   * that it stands for. `undefined` when `getUser` is `false`, returns
+   * nothing, returns a value that is not a Sentry user, or throws. The
+   * detection is made once, on the first failure, since the developer behind
+   * a run does not change during the run. Each person resolves only when
+   * `getUser` reads it.
    */
-  private resolveUser(ctx: FailureContext): SentryUser | undefined {
+  private resolveUser(
+    ctx: FailureContext,
+  ): { user: SentryUser; source?: UserSource } | undefined {
     if (!this.getUser) return undefined;
     this.detected ??= detectIdentities(process.env);
+    const detected = this.detected;
     let user: unknown;
     try {
-      user = this.getUser(ctx, this.detected);
+      user = this.getUser(ctx, detected);
     } catch (error) {
       // A broken callback costs the Sentry user, never the failure event.
       this.warnOnce(
@@ -393,21 +417,10 @@ export class VitestSentryReporter implements Reporter {
       return undefined;
     }
     if (!user) return undefined;
-    if (isSentryUser(user)) return user;
+    if (isSentryUser(user)) return { user, source: userSource(user, detected) };
     this.warnOnce(
       `getUser returned ${describeValue(user)}, and not a Sentry user with an id, a username or an email. The reporter sends the failure without a user.`,
     );
-    return undefined;
-  }
-
-  /**
-   * Which detected person `user` stands for, for the `user_source` tag. It
-   * compares the fields, so it also works for a custom `getUser`.
-   */
-  private userSource(user: SentryUser): UserSource | undefined {
-    if (isSamePerson(user, this.detected?.developer)) return 'developer';
-    // Last, because the first read of `committer` runs `git log`.
-    if (isSamePerson(user, this.detected?.committer)) return 'committer';
     return undefined;
   }
 

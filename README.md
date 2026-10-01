@@ -213,9 +213,13 @@ Out of the box the reporter recognizes:
 | Gemini CLI | `ai` | `GEMINI_CLI` | — |
 | opencode | `ai` | `OPENCODE`, `OPENCODE_BIN_PATH` | — |
 | Any agent advertising itself | `ai` | `AI_AGENT`, `AGENT` (reported as `actor_name`) | — |
-| Dependabot / Renovate | `bot` | `GITHUB_ACTOR`, `RENOVATE_VERSION` | `*[bot]` |
-| Any `*[bot]` / GitLab token login | `bot` | `GITHUB_ACTOR`, `GITLAB_USER_LOGIN` | `*[bot]` |
+| Dependabot / Renovate | `bot` | `GITHUB_TRIGGERING_ACTOR`, `GITHUB_ACTOR`, `RENOVATE_VERSION` | `*[bot]` |
+| Any `*[bot]` / GitLab token login | `bot` | `GITHUB_TRIGGERING_ACTOR`, `GITHUB_ACTOR`, `GITLAB_USER_LOGIN` | `*[bot]` |
 | Everyone else | `human` | — | — |
+
+On a GitHub re-run, the login is the account that started the re-run
+(`GITHUB_TRIGGERING_ACTOR`). A person who re-runs the job of a bot is therefore
+`human`.
 
 A git user or a commit with the commit email of an actor never counts as a
 person for `getUser` (see [Who triggered the run](#who-triggered-the-run-identity--users-affected)).
@@ -260,7 +264,8 @@ new VitestSentryReporter({
 });
 ```
 
-The reporter detects two people once per run, on the first failure:
+The reporter detects two people once per run. Each one resolves when your
+function reads it for the first time:
 
 | Candidate   | Who                                                                                                                                 |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -282,19 +287,30 @@ because GitHub exposes no id for that person.
 | No user for one Vitest project        | `(ctx, { developer: d }) => ctx.meta?.projectName === 'e2e' ? undefined : d && { id: d.pseudonymizedId }` |
 | No user and no tag, with no detection | `false`                                                                                        |
 
+Sentry counts a user by `id`, else `username`, else `email`. With the raw
+fields, a GitHub run sends the account `id`. A local run, or a re-run of the
+job of another person, sends no `id`. Sentry then counts one person twice.
+Send `pseudonymizedId` as the `id` to keep one count per person.
+
 The first argument, `ctx`, is the failure context, as in `getTags`. A 1.5.0
-`getUser(ctx)` function works without a change. Return `undefined` to send no
-user. If the function throws, or returns a truthy value that is not a Sentry
-user, the reporter sends the failure without a user and logs one warning.
+`getUser(ctx)` function works without a change, and runs no git command.
+Return `undefined` to send no user. If the function throws, or returns a truthy
+value that is not a Sentry user, the reporter sends the failure without a user
+and logs one warning.
 
 `user_source` compares the fields that your function returns with the fields of
-each candidate. A user that matches neither candidate gets no `user_source`.
+each candidate that your function read, so it runs no git command. A user that
+matches neither candidate gets no `user_source`.
 
 #### How the people are detected
 
-- **`developer` in CI**: the account that triggered the run, per provider: GitHub `GITHUB_TRIGGERING_ACTOR`, else `GITHUB_ACTOR`, with `GITHUB_ACTOR_ID` when both name one account, GitLab `GITLAB_USER_*`, CircleCI `CIRCLE_USERNAME`, Buildkite `BUILDKITE_BUILD_CREATOR*`, Jenkins `CHANGE_AUTHOR*`/`BUILD_USER*`. On a GitHub re-run, the developer is the person who started the re-run. On a scheduled GitHub run, the account is the person who last changed the `cron` schedule or the default branch. That person did not start the run. A CI that exposes no trigger-er, for example a bare `CI=true`, gives no developer.
+- **`developer` in CI**: the account that triggered the run, per provider: GitHub `GITHUB_TRIGGERING_ACTOR`, else `GITHUB_ACTOR`, with `GITHUB_ACTOR_ID` when both name one account, GitLab `GITLAB_USER_*`, CircleCI `CIRCLE_USERNAME`, Buildkite `BUILDKITE_BUILD_CREATOR*`, Jenkins `CHANGE_AUTHOR*`/`BUILD_USER*`. On a GitHub re-run, the developer is the person who started the re-run, also when a bot started the first run. On a scheduled GitHub run, the account is the person who last changed the `cron` schedule or the default branch. That person did not start the run. A CI that exposes no trigger-er, for example a bare `CI=true`, gives no developer.
 - **`developer` outside CI**: `git config user.name` and `user.email`, else the OS username.
 - **`committer`**: `git log -1` on `HEAD`, when your function reads `committer` for the first time. The default reads it only when there is no developer. GitHub is the committer of every commit merged on github.com, so the reporter then uses the author. `HEAD` carries its own metadata, so the result does not depend on the checkout depth.
+
+A read of a candidate runs its detection, also when the read is implicit:
+destructuring, a spread or `JSON.stringify`. For example,
+`(_ctx, { developer, committer }) => ...` always runs `git log -1`.
 
 Bots and AI agents never count. When one runs the tests (the same detection as
 `actor_type`), `developer` is absent, and the default falls back to `committer`.

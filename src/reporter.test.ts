@@ -38,11 +38,15 @@ const codeowners = vi.hoisted(() => ({
 }));
 vi.mock('./codeowners/index.js', () => codeowners);
 
-// Control automatic identity detection so it never shells out to git.
+// Control automatic identity detection so it never shells out to git. The
+// real `isResolved` stays, because it only inspects the returned object.
 const identity = vi.hoisted(() => ({
   detectIdentities: vi.fn(() => ({}) as unknown),
 }));
-vi.mock('./identity.js', () => identity);
+vi.mock('./identity.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./identity.js')>()),
+  ...identity,
+}));
 
 import { makeDryRunTransport } from './dry-run-transport.js';
 import type { DetectedIdentities } from './identity.js';
@@ -796,8 +800,19 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     );
   });
 
-  it('keeps a 1.5.0 getUser(ctx) function working', async () => {
-    identity.detectIdentities.mockReturnValue(DETECTED);
+  it('keeps a 1.5.0 getUser(ctx) function working, with no detection', async () => {
+    // Each person resolves on its first read, and that read runs git.
+    const read = vi.fn();
+    identity.detectIdentities.mockReturnValue({
+      get developer() {
+        read('developer');
+        return DETECTED.developer;
+      },
+      get committer() {
+        read('committer');
+        return DETECTED.committer;
+      },
+    });
     const warn = captureWarnings();
 
     const scope = await reportOneFailure({
@@ -805,6 +820,9 @@ describe('VitestSentryReporter (Vitest 4 API)', () => {
     });
 
     expect(scope.setUser).toHaveBeenCalledWith({ id: 'owner-of-t1' });
+    // Not even the user_source tag reads a person that getUser did not read.
+    expect(read).not.toHaveBeenCalled();
+    expect(scope.setTags.mock.calls[0][0]).not.toHaveProperty('user_source');
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });

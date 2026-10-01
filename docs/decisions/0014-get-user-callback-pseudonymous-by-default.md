@@ -76,13 +76,16 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
   `committer`. A run that a bot triggers, for example a merge queue, then
   counts the person behind the change, if `HEAD` has a committer or an author
   that is not GitHub, a bot or an AI agent. Else the default sends no user.
-- The reporter detects the people once per run, on the first failure. It calls
-  the callback for each failure, with the failure context and the detection.
-  `committer` runs `git log -1` on its first read, and the default reads it
-  only when there is no developer.
+- The reporter makes the detection once per run, on the first failure. It
+  calls the callback for each failure, with the failure context and the
+  detection. Each person resolves on its first read only, with its git
+  command, so a callback that reads no person runs no git command. The default
+  reads `committer` only when there is no developer. An assignment replaces a
+  person and runs no detection.
 - A `user_source` tag, `developer` or `committer`, tells which person the
   Sentry user stands for. The reporter compares the returned fields with the
-  detected ones, so the tag also works for a custom callback.
+  people that the callback read, so the tag also works for a custom callback,
+  and it never runs git.
 - `false` skips the detection, the Sentry user, and the `triggered_by` and
   `user_source` tags. A callback that throws, or that returns a truthy value
   that is not a Sentry user, sends the failure with no user and logs one
@@ -91,7 +94,9 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
   `GITHUB_ACTOR`, so a re-run counts the person who started it. It attaches
   `GITHUB_ACTOR_ID` only when both name one account, because GitHub exposes no
   id for the triggering actor. GitHub exposes no email either, so the seed of
-  the pseudonymized id is the username, with or without the id.
+  the pseudonymized id is the username, with or without the id. The actor
+  check reads the same account, so a person who re-runs the job of a bot is a
+  human, and counts as the developer.
 
 ## Consequences
 
@@ -100,9 +105,12 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
 - The default sends pseudonymous personal data. A privacy review is still
   necessary before the upgrade, because the default makes that decision for
   every consumer.
-- The release notes must say that 2.0 sends a Sentry user by default. On the
-  first failure, it runs `git config` outside CI, and `git log -1` when it
-  finds no developer. By default, 1.5.0 sent no user and ran no git command.
+- The release notes must say that 2.0 sends a Sentry user by default. With
+  the default callback, on the first failure, the reporter runs `git config`
+  outside CI, and `git log -1` when it finds no developer. By default, 1.5.0
+  sent no user and ran no git command.
+- On a GitHub re-run, `actor_type` and `actor_name` describe the account that
+  started the re-run, and no longer the account that started the first run.
 - `triggered_by` carries the committer when the default falls back to it. The
   `user_source` tag tells this case apart.
 - On a scheduled GitHub run, `developer` is the person who last changed the
@@ -113,7 +121,12 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
   two emails. A filter on the Sentry environment counts each context on its
   own.
 - The callback receives the raw fields. A function that returns them sends
-  them, for example the public GitHub account id.
+  them, for example the public GitHub account id. Sentry counts a user by
+  `id`, else `username`, else `email`, so raw fields can count one person
+  twice: a GitHub run has an `id`, and a local run has none.
+- A read of a person can be implicit: destructuring, a spread or
+  `JSON.stringify`. A callback that destructures both people always runs
+  `git log -1`.
 - The digest is unsalted, so a party who holds the list of team emails or
   logins can match an id to a person. Treat the id as personal data under the
   GDPR.
@@ -153,6 +166,14 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
 - **A separate list of automation emails next to `ACTOR_DETECTORS`.** A draft
   of this decision. Rejected in review. A new agent then needs two edits in two
   files.
+- **An actor check on `GITHUB_ACTOR` only.** A draft of this decision.
+  Rejected in review. A person who re-runs the job of a bot then gets no user.
+- **No actor check in CI, only the automation check of the trigger-er.**
+  Rejected. The `actor_type` tag would still say `bot` for a run that a person
+  started.
+- **A detection that runs `git` at once.** A draft of this decision. Rejected
+  in review. A callback that reads no person, and the `user_source` tag, then
+  run git for nothing.
 - **Keep the feature off by default.** Rejected. An off-by-default metric stays
   empty.
 - **Salt the digest, send a random id per run, or send the full digest.**
@@ -164,18 +185,22 @@ type DetectedIdentity = { id?: string; username?: string; email?: string; pseudo
 `src/identity.test.ts` covers the seed order and its normalization, the raw
 fields, one id for a developer and a committer with one email, the CI
 trigger-er, a CI without a trigger-er, the git user, the OS user fallback, the
-committer and its author fallback, the single `git log` on the first read, the
-exclusion of GitHub, bots and the agents of the registry, and the case where
-nothing resolves. `src/identity.git.test.ts` runs a real git on a pull request
-merge ref, cloned shallow and in full. It checks that both clones give the same
-developer and the same committer, and that a bot at `HEAD` gives no committer.
-`src/reporter.test.ts` covers the default and its committer fallback, the
-`user_source` tag, no read of `committer` when the default has a developer, the
-callback arguments, a 1.5.0 `getUser(ctx)` callback, a different user per
-failure, `false`, the wrong return shapes, a callback that throws, the leftover
-1.5.0 keys, the manual `triggered_by` and `user_source` tags, and the single
-detection per run. `src/ci-providers/github.test.ts` covers the triggering
-actor, and the id only for one account.
+committer and its author fallback, no detection before the first read, a single
+`git log` on the first read, an assignment with no detection, the exclusion of
+GitHub, bots and the agents of the registry, and the case where nothing
+resolves. `src/identity.ci.test.ts` runs the real actor registry and GitHub
+provider: a person who re-runs the job of a bot counts, and a bot that runs or
+re-runs a job does not. `src/identity.git.test.ts` runs a real git on a pull
+request merge ref, cloned shallow and in full. It checks that both clones give
+the same developer and the same committer, and that a bot at `HEAD` gives no
+committer. `src/reporter.test.ts` covers the default and its committer fallback,
+the `user_source` tag, no read of `committer` when the default has a developer,
+the callback arguments, a 1.5.0 `getUser(ctx)` callback that reads no person, a
+different user per failure, `false`, the wrong return shapes, a callback that
+throws, the leftover 1.5.0 keys, the manual `triggered_by` and `user_source`
+tags, and the single detection per run. `src/ci-providers/github.test.ts` covers
+the triggering actor, and the id only for one account.
+`src/actor-detectors/index.test.ts` covers the login of a GitHub re-run.
 
 ## References
 

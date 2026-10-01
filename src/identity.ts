@@ -24,19 +24,23 @@ export type DetectedIdentity = {
   pseudonymizedId: string;
 };
 
-/** The people that the reporter detects for the current run. */
+/**
+ * The people that the reporter detects for the current run. Each field runs
+ * its detection, and its git command, on its first read only, in the current
+ * directory. Destructuring, a spread and `JSON.stringify` read the fields too.
+ * An assignment replaces a field and runs no detection.
+ */
 export type DetectedIdentities = {
   /**
    * The person who ran the tests: in CI, the account that triggered the run,
-   * and outside CI, `git config user.*`, else the OS user. Absent when a bot
-   * or an AI agent runs the tests.
+   * and outside CI, `git config user.*`, else the OS user. `undefined` when a
+   * bot or an AI agent runs the tests.
    */
   developer?: DetectedIdentity;
   /**
-   * The person behind the latest commit (`HEAD`): its committer, else its
-   * author. GitHub, bots and AI agents do not count, so the field is
-   * `undefined` when only they remain. The first read runs `git log -1` in
-   * the current directory.
+   * The person behind the latest commit (`HEAD`), from `git log -1`: its
+   * committer, else its author. GitHub, bots and AI agents do not count, so
+   * the field is `undefined` when only they remain.
    */
   committer?: DetectedIdentity;
 };
@@ -46,35 +50,68 @@ export type DetectedIdentities = {
  *
  * `developer` comes from the CI provider in CI (see {@link detectProvider}),
  * and from `git config`, else the OS user, outside CI. `committer` comes from
- * the `HEAD` commit, on its first read. Each one is `undefined` when nothing
- * usable resolves.
+ * the `HEAD` commit. Each one resolves on its first read, so a caller that
+ * reads no field runs no git command.
  */
 export function detectIdentities(
   env: NodeJS.ProcessEnv = process.env,
 ): DetectedIdentities {
   const identities: DetectedIdentities = {};
-  // Never attribute a run to the bot or the AI agent that runs it.
-  if (detectActor(env).type === 'human') {
-    const person = runner(env);
-    if (person && !isAutomation(person)) {
-      identities.developer = toDetectedIdentity(person);
-    }
-  }
-  // Run `git log` only if a caller reads the committer, and only once.
-  Object.defineProperty(identities, 'committer', {
-    enumerable: true,
-    get: once(() => toDetectedIdentity(latestCommitter(env))),
-  });
+  defineLazy(identities, 'developer', () => detectDeveloper(env));
+  defineLazy(identities, 'committer', () =>
+    toDetectedIdentity(latestCommitter(env)),
+  );
   return identities;
 }
 
-/** Call `fn` on the first call only, and return its result on every call. */
-function once<T>(fn: () => T): () => T {
-  let result: { value: T } | undefined;
-  return () => {
-    result ??= { value: fn() };
-    return result.value;
+/**
+ * True when reading `key` runs no detection: a caller read or assigned it, or
+ * `identities` did not come from {@link detectIdentities}.
+ */
+export function isResolved(
+  identities: DetectedIdentities,
+  key: keyof DetectedIdentities,
+): boolean {
+  const descriptor = Object.getOwnPropertyDescriptor(identities, key);
+  return !descriptor || 'value' in descriptor;
+}
+
+/**
+ * Define `key` as a field that `resolve` computes on its first read. The read,
+ * or an assignment, turns it into a plain field, so that it resolves once.
+ */
+function defineLazy<K extends keyof DetectedIdentities>(
+  identities: DetectedIdentities,
+  key: K,
+  resolve: () => DetectedIdentities[K],
+): void {
+  const settle = (value: DetectedIdentities[K]) => {
+    Object.defineProperty(identities, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   };
+  Object.defineProperty(identities, key, {
+    enumerable: true,
+    configurable: true,
+    get: () => {
+      const value = resolve();
+      settle(value);
+      return value;
+    },
+    set: settle,
+  });
+}
+
+function detectDeveloper(env: NodeJS.ProcessEnv): DetectedIdentity | undefined {
+  // Never attribute a run to the bot or the AI agent that runs it.
+  if (detectActor(env).type !== 'human') return undefined;
+  const person = runner(env);
+  return person && !isAutomation(person)
+    ? toDetectedIdentity(person)
+    : undefined;
 }
 
 function runner(env: NodeJS.ProcessEnv): SentryUser | undefined {
