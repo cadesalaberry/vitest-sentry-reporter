@@ -67,7 +67,30 @@ describe('GitHubActionsProvider', () => {
     ).toBeUndefined();
   });
 
-  it('resolves the actor and its numeric id', () => {
+  it('resolves the triggering actor and its numeric id', () => {
+    expect(
+      GitHubActionsProvider.triggeredBy({
+        ...env,
+        GITHUB_TRIGGERING_ACTOR: 'alice',
+        GITHUB_ACTOR: 'alice',
+        GITHUB_ACTOR_ID: '42',
+      }),
+    ).toEqual({ username: 'alice', id: '42' });
+  });
+
+  it('resolves the person who re-ran the job, without the id of another account', () => {
+    // Bob re-runs the job of Alice. GITHUB_ACTOR_ID is the id of Alice.
+    expect(
+      GitHubActionsProvider.triggeredBy({
+        ...env,
+        GITHUB_TRIGGERING_ACTOR: 'bob',
+        GITHUB_ACTOR: 'alice',
+        GITHUB_ACTOR_ID: '42',
+      }),
+    ).toStrictEqual({ username: 'bob' });
+  });
+
+  it('falls back to GITHUB_ACTOR and has none without either', () => {
     expect(
       GitHubActionsProvider.triggeredBy({
         ...env,
@@ -75,28 +98,7 @@ describe('GitHubActionsProvider', () => {
         GITHUB_ACTOR_ID: '42',
       }),
     ).toEqual({ username: 'alice', id: '42' });
-  });
-
-  it('keeps the original actor and its id on a re-run by another account', () => {
-    // GitHub exposes no id for GITHUB_TRIGGERING_ACTOR, so the pair stays bob.
-    expect(
-      GitHubActionsProvider.triggeredBy({
-        ...env,
-        GITHUB_TRIGGERING_ACTOR: 'alice',
-        GITHUB_ACTOR: 'bob',
-        GITHUB_ACTOR_ID: '42',
-      }),
-    ).toEqual({ username: 'bob', id: '42' });
-  });
-
-  it('has no trigger-er without GITHUB_ACTOR', () => {
     expect(GitHubActionsProvider.triggeredBy(env)).toBeUndefined();
-    expect(
-      GitHubActionsProvider.triggeredBy({
-        ...env,
-        GITHUB_TRIGGERING_ACTOR: 'alice',
-      }),
-    ).toBeUndefined();
   });
 
   it('snapshots only its own environment keys', () => {

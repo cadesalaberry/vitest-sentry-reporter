@@ -80,8 +80,8 @@ export type VitestSentryReporterOptions = {
    */
   getUser?:
     | ((
-        detected: DetectedIdentities,
         ctx: FailureContext,
+        detected: DetectedIdentities,
       ) => SentryUser | undefined)
     | false;
   /**

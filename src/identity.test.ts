@@ -11,10 +11,14 @@ const osMock = vi.hoisted(() => ({
 }));
 vi.mock('node:os', () => osMock);
 
+// The real registry, with a controlled detectActor.
 const actor = vi.hoisted(() => ({
   detectActor: vi.fn(() => ({ type: 'human', name: 'human' })),
 }));
-vi.mock('./actor-detectors/index.js', () => actor);
+vi.mock('./actor-detectors/index.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./actor-detectors/index.js')>()),
+  ...actor,
+}));
 
 const ci = vi.hoisted(() => ({ detectProvider: vi.fn(() => undefined) }));
 vi.mock('./ci-providers/index.js', () => ci);
@@ -28,6 +32,18 @@ const pseudonym = (seed: string) => `dev-${sha256(seed).slice(0, 16)}`;
 type Person = { name: string; email: string };
 const JANE: Person = { name: 'Jane Dev', email: 'jane@acme.test' };
 const GITHUB: Person = { name: 'GitHub', email: 'noreply@github.com' };
+/** Agents that commit under their own name, by the commit email in the registry. */
+const AGENTS: Person[] = [
+  { name: 'Claude', email: 'noreply@anthropic.com' },
+  { name: 'Cursor Agent', email: 'cursoragent@cursor.com' },
+  { name: 'Copilot', email: '198982749+Copilot@users.noreply.github.com' },
+];
+
+/** The `git log` calls that the mocked git received. */
+const gitLogCalls = () =>
+  cp.execFileSync.mock.calls
+    .map(([, args]) => args as string[])
+    .filter((args) => args[0] === 'log');
 
 /** Drive the mocked git: `git config` and the `HEAD` committer and author. */
 function gitReturns(map: {
@@ -150,8 +166,10 @@ describe('detectIdentities', () => {
 
   it('detects no developer when the git user is a bot or an AI agent', () => {
     // For example a sandbox that commits as the agent, with no AI marker set.
-    gitReturns({ name: 'Claude', email: 'noreply@anthropic.com' });
-    expect(detectIdentities({})).not.toHaveProperty('developer');
+    for (const agent of AGENTS) {
+      gitReturns({ name: agent.name, email: agent.email });
+      expect(detectIdentities({})).not.toHaveProperty('developer');
+    }
 
     inCI({ username: 'renovate[bot]' });
     expect(detectIdentities({})).not.toHaveProperty('developer');
@@ -184,12 +202,22 @@ describe('detectIdentities', () => {
 
   it('reads only the HEAD commit for the committer, not the history', () => {
     gitReturns({ committer: JANE });
-    detectIdentities({});
+    expect(detectIdentities({}).committer?.email).toBe(JANE.email);
 
-    const log = cp.execFileSync.mock.calls
-      .map(([, args]) => args as string[])
-      .filter((args) => args[0] === 'log');
-    expect(log).toEqual([['log', '-1', '--format=%cn%x1f%ce%x1f%an%x1f%ae']]);
+    expect(gitLogCalls()).toEqual([
+      ['log', '-1', '--format=%cn%x1f%ce%x1f%an%x1f%ae'],
+    ]);
+  });
+
+  it('runs git log on the first read of the committer only', () => {
+    gitReturns({ name: JANE.name, email: JANE.email, committer: JANE });
+    const detected = detectIdentities({});
+    expect(detected.developer?.email).toBe(JANE.email);
+    expect(gitLogCalls()).toHaveLength(0);
+
+    expect(detected.committer?.email).toBe(JANE.email);
+    expect(detected.committer?.email).toBe(JANE.email);
+    expect(gitLogCalls()).toHaveLength(1);
   });
 
   it('uses the author when GitHub is the committer', () => {
@@ -202,11 +230,10 @@ describe('detectIdentities', () => {
       name: 'github-actions[bot]',
       email: '41898282+github-actions[bot]@users.noreply.github.com',
     };
-    const agent: Person = { name: 'Claude', email: 'noreply@anthropic.com' };
 
-    for (const author of [release, agent, GITHUB]) {
+    for (const author of [release, ...AGENTS, GITHUB]) {
       gitReturns({ committer: GITHUB, author });
-      expect(detectIdentities({})).not.toHaveProperty('committer');
+      expect(detectIdentities({}).committer).toBeUndefined();
     }
   });
 

@@ -75,7 +75,9 @@ function detectIn(dir: string) {
   const cwd = process.cwd();
   process.chdir(join(root, dir));
   try {
-    return detectIdentities(env);
+    // Read both people here: the first read of `committer` runs git.
+    const { developer, committer } = detectIdentities(env);
+    return { developer, committer };
   } finally {
     process.chdir(cwd);
   }
@@ -147,6 +149,6 @@ describe('detectIdentities on a real git checkout', () => {
   });
 
   it('detects no committer when a bot authored HEAD', () => {
-    expect(detectIn('main-tip')).not.toHaveProperty('committer');
+    expect(detectIn('main-tip').committer).toBeUndefined();
   });
 });

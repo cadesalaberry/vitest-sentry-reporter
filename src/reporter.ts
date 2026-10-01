@@ -9,7 +9,11 @@ import type {
 } from 'vitest/node';
 import { resolveCodeOwners } from './codeowners/index.js';
 import { makeDryRunTransport } from './dry-run-transport.js';
-import { type DetectedIdentities, detectIdentities } from './identity.js';
+import {
+  type DetectedIdentities,
+  type DetectedIdentity,
+  detectIdentities,
+} from './identity.js';
 import type {
   FailureContext,
   Primitive,
@@ -32,14 +36,35 @@ import {
 /**
  * The default `getUser`: the pseudonymized id of the developer, else of the
  * latest committer, so a run that a bot triggers still counts the person
- * behind the change.
+ * behind the change. It reads `committer` only when there is no developer,
+ * because the first read runs `git log`.
  */
-function defaultGetUser({
-  developer,
-  committer,
-}: DetectedIdentities): SentryUser | undefined {
-  const person = developer ?? committer;
+function defaultGetUser(
+  _ctx: FailureContext,
+  detected: DetectedIdentities,
+): SentryUser | undefined {
+  const person = detected.developer ?? detected.committer;
   return person ? { id: person.pseudonymizedId } : undefined;
+}
+
+/** The detected person that a Sentry user stands for. */
+type UserSource = 'developer' | 'committer';
+
+/** True when a field of `user` is a field of `person`. */
+function isSamePerson(
+  user: SentryUser,
+  person: DetectedIdentity | undefined,
+): boolean {
+  if (!person) return false;
+  const known: unknown[] = [
+    person.pseudonymizedId,
+    person.id,
+    person.username,
+    person.email,
+  ];
+  return [user.id, user.username, user.email].some(
+    (value) => Boolean(value) && known.includes(value),
+  );
 }
 
 /** 1.5.0 options that no longer exist, and what replaces each one. */
@@ -72,8 +97,8 @@ export class VitestSentryReporter implements Reporter {
   private codeownersEnabled: boolean;
   private codeownersRoot?: string;
   private getUser?: (
-    detected: DetectedIdentities,
     ctx: FailureContext,
+    detected: DetectedIdentities,
   ) => SentryUser | undefined;
   private detected?: DetectedIdentities;
   private warned: Set<string>;
@@ -195,11 +220,13 @@ export class VitestSentryReporter implements Reporter {
       owners.length > 0
         ? { code_owners: owners.join(','), code_owner: owners[0] }
         : {};
-    // The Sentry user for this failure, and its searchable counterpart.
+    // The Sentry user for this failure, and its searchable counterparts.
     const user = this.resolveUser(ctx);
-    const triggeredBy = user?.username ?? user?.id;
-    const identityTags: Record<string, Primitive> = triggeredBy
-      ? { triggered_by: triggeredBy }
+    const identityTags: Record<string, Primitive> = user
+      ? {
+          triggered_by: user.username || user.id,
+          user_source: this.userSource(user),
+        }
       : {};
     const mergedTags = {
       ...manualTags,
@@ -356,7 +383,7 @@ export class VitestSentryReporter implements Reporter {
     this.detected ??= detectIdentities(process.env);
     let user: unknown;
     try {
-      user = this.getUser(this.detected, ctx);
+      user = this.getUser(ctx, this.detected);
     } catch (error) {
       // A broken callback costs the Sentry user, never the failure event.
       this.warnOnce(
@@ -370,6 +397,17 @@ export class VitestSentryReporter implements Reporter {
     this.warnOnce(
       `getUser returned ${describeValue(user)}, and not a Sentry user with an id, a username or an email. The reporter sends the failure without a user.`,
     );
+    return undefined;
+  }
+
+  /**
+   * Which detected person `user` stands for, for the `user_source` tag. It
+   * compares the fields, so it also works for a custom `getUser`.
+   */
+  private userSource(user: SentryUser): UserSource | undefined {
+    if (isSamePerson(user, this.detected?.developer)) return 'developer';
+    // Last, because the first read of `committer` runs `git log`.
+    if (isSamePerson(user, this.detected?.committer)) return 'committer';
     return undefined;
   }
 

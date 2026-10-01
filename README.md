@@ -117,10 +117,10 @@ export default defineConfig({
 
         // Sentry user for each failure, so Sentry counts and ranks failures
         // per developer. The function below is the default: one
-        // pseudonymized id, no name and no email. The second argument is
+        // pseudonymized id, no name and no email. The first argument is
         // the failure context. Set `false` to send no user.
-        getUser: ({ developer, committer }) => {
-          const person = developer ?? committer;
+        getUser: (_ctx, detected) => {
+          const person = detected.developer ?? detected.committer;
           return person && { id: person.pseudonymizedId };
         },
 
@@ -167,15 +167,15 @@ export default defineConfig({
 });
 ```
 
-The `ctx` passed to `shouldReport`, `getTags`, `getFingerprint` and
-`beforeSend`, and the second argument of `getUser`, is the failure context. It carries `testName`, `fullTitle`,
+The `ctx` passed to `shouldReport`, `getTags`, `getFingerprint`, `getUser` and
+`beforeSend` is the failure context. It carries `testName`, `fullTitle`,
 `suitePath`, `filePath`, `relativeFilePath`, `message`, `stack`, `error`,
 `durationMs`, `retry`, `flaky`, `logs` and `meta`.
 
 ### What gets reported
 
 - **Error**: The thrown error from the failed test (or synthesized from message).
-- **Tags**: `test_file` (repo-relative path, see below), `test_name`, `test_full_title`, `test_project` (Vitest project/workspace name, handy for monorepos), `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `job_name` (CI job/step/shard name), `repository`, `branch`, `commit_sha`, `run_url` (link to the CI run/build, when detected), plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus `triggered_by` when `getUser` returns a user, plus any custom tags.
+- **Tags**: `test_file` (repo-relative path, see below), `test_name`, `test_full_title`, `test_project` (Vitest project/workspace name, handy for monorepos), `flaky`, `retry`, `node_version`, `os_platform`, `os_release`, `ci`, `trigger`, `actor_type`, `actor_name`, `job_name` (CI job/step/shard name), `repository`, `branch`, `commit_sha`, `run_url` (link to the CI run/build, when detected), plus `code_owners`/`code_owner` when CODEOWNERS resolution is enabled, plus `triggered_by` and `user_source` when `getUser` returns a user, plus any custom tags.
 - **User**: the user that `getUser` picks, which powers Sentry's "users affected" metric. By default, the pseudonymized id of the developer who ran the tests, else of the latest committer (see below).
 - **Extras**: `duration_ms`, `logs`, `suite_path`, `vitest_version`, minimal CI env snapshot.
 - **Contexts**: `test` context with file/name/fullTitle/duration/retry/flaky; in CI, a `ci` context with direct triage links — `pull_request_url`, `run_url`, `commit_url`, and `workflow_id` — for whichever the detected provider exposes. Sentry renders these URLs as clickable links, so the failing run, pull request and commit are one click from the issue.
@@ -204,18 +204,21 @@ Every failure is tagged with how the run was started and who (or what) started i
 
 Out of the box the reporter recognizes:
 
-| Actor | `actor_type` | Markers |
-|---|---|---|
-| Claude Code | `ai` | `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT` |
-| Cursor | `ai` | `CURSOR_AGENT` |
-| GitHub Copilot coding agent | `ai` | `GITHUB_ACTOR=copilot-swe-agent[bot]` |
-| OpenAI Codex | `ai` | `CODEX_SANDBOX`, `CODEX_PROXY_CERT` |
-| Gemini CLI | `ai` | `GEMINI_CLI` |
-| opencode | `ai` | `OPENCODE`, `OPENCODE_BIN_PATH` |
-| Any agent advertising itself | `ai` | `AI_AGENT`, `AGENT` (reported as `actor_name`) |
-| Dependabot / Renovate | `bot` | `GITHUB_ACTOR`, `RENOVATE_VERSION` |
-| Any `*[bot]` / GitLab token login | `bot` | `GITHUB_ACTOR`, `GITLAB_USER_LOGIN` |
-| Everyone else | `human` | — |
+| Actor | `actor_type` | Markers | Commit email |
+|---|---|---|---|
+| Claude Code | `ai` | `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT` | `noreply@anthropic.com` |
+| Cursor | `ai` | `CURSOR_AGENT` | `cursoragent@cursor.com` |
+| GitHub Copilot coding agent | `ai` | `GITHUB_ACTOR=copilot-swe-agent[bot]` | `<id>+Copilot@users.noreply.github.com` |
+| OpenAI Codex | `ai` | `CODEX_SANDBOX`, `CODEX_PROXY_CERT` | — |
+| Gemini CLI | `ai` | `GEMINI_CLI` | — |
+| opencode | `ai` | `OPENCODE`, `OPENCODE_BIN_PATH` | — |
+| Any agent advertising itself | `ai` | `AI_AGENT`, `AGENT` (reported as `actor_name`) | — |
+| Dependabot / Renovate | `bot` | `GITHUB_ACTOR`, `RENOVATE_VERSION` | `*[bot]` |
+| Any `*[bot]` / GitLab token login | `bot` | `GITHUB_ACTOR`, `GITLAB_USER_LOGIN` | `*[bot]` |
+| Everyone else | `human` | — | — |
+
+A git user or a commit with the commit email of an actor never counts as a
+person for `getUser` (see [Who triggered the run](#who-triggered-the-run-identity--users-affected)).
 
 Detection lives in a single declarative registry
 ([`src/actor-detectors/index.ts`](src/actor-detectors/index.ts)): supporting a
@@ -241,7 +244,8 @@ The same three tags can also be pinned from the reporter options (`tags` or
 The `getUser` option sets Sentry's **user** for each failure. Sentry counts
 distinct users, so its "N users affected" metric ranks each failed test by the
 number of developers that it affects. A searchable `triggered_by` tag carries
-the username, else the id.
+the username, else the id. A `user_source` tag tells whether the user is the
+`developer` or the `committer`.
 
 The default sends one pseudonymized id, for example `dev-e383094d4770a80f`, and
 no name and no email. That id is still personal data under the GDPR.
@@ -249,8 +253,8 @@ no name and no email. That id is still personal data under the GDPR.
 ```ts
 new VitestSentryReporter({
   // The default.
-  getUser: ({ developer, committer }) => {
-    const person = developer ?? committer;
+  getUser: (_ctx, detected) => {
+    const person = detected.developer ?? detected.committer;
     return person && { id: person.pseudonymizedId };
   },
 });
@@ -266,34 +270,41 @@ The reporter detects two people once per run, on the first failure:
 Each candidate has `id`, `username` and `email` when the source knows them, and
 always a `pseudonymizedId`. `id`, `username` and `email` are personal data, and
 they reach Sentry only when your function returns them. On GitHub Actions, `id`
-is the numeric GitHub account id.
+is the numeric GitHub account id. A re-run by another person has no `id`,
+because GitHub exposes no id for that person.
 
 | To send                               | `getUser`                                                                                     |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | The pseudonymized id only (default)   | The function above                                                                             |
-| The pseudonymized id and the name     | `({ developer: d }) => d && { id: d.pseudonymizedId, username: d.username }`                   |
-| All that the reporter knows           | `({ developer: d }) => d && { id: d.id, username: d.username, email: d.email }`                |
-| The committer only                    | `({ committer: c }) => c && { id: c.pseudonymizedId }`                                         |
-| No user for one Vitest project        | `({ developer: d }, ctx) => ctx.meta?.projectName === 'e2e' ? undefined : d && { id: d.pseudonymizedId }` |
+| The pseudonymized id and the name     | `(_ctx, { developer: d }) => d && { id: d.pseudonymizedId, username: d.username }`             |
+| All that the reporter knows           | `(_ctx, { developer: d }) => d && { id: d.id, username: d.username, email: d.email }`          |
+| The committer only                    | `(_ctx, { committer: c }) => c && { id: c.pseudonymizedId }`                                   |
+| No user for one Vitest project        | `(ctx, { developer: d }) => ctx.meta?.projectName === 'e2e' ? undefined : d && { id: d.pseudonymizedId }` |
 | No user and no tag, with no detection | `false`                                                                                        |
 
-The second argument, `ctx`, is the failure context. Return `undefined` to send
-no user. If the function throws, or returns a truthy value that is not a Sentry
+The first argument, `ctx`, is the failure context, as in `getTags`. A 1.5.0
+`getUser(ctx)` function works without a change. Return `undefined` to send no
+user. If the function throws, or returns a truthy value that is not a Sentry
 user, the reporter sends the failure without a user and logs one warning.
+
+`user_source` compares the fields that your function returns with the fields of
+each candidate. A user that matches neither candidate gets no `user_source`.
 
 #### How the people are detected
 
-- **`developer` in CI**: the account that triggered the run, per provider: GitHub `GITHUB_ACTOR` and `GITHUB_ACTOR_ID`, GitLab `GITLAB_USER_*`, CircleCI `CIRCLE_USERNAME`, Buildkite `BUILDKITE_BUILD_CREATOR*`, Jenkins `CHANGE_AUTHOR*`/`BUILD_USER*`. A GitHub re-run keeps the original actor. A CI that exposes no trigger-er, for example a bare `CI=true`, gives no developer.
+- **`developer` in CI**: the account that triggered the run, per provider: GitHub `GITHUB_TRIGGERING_ACTOR`, else `GITHUB_ACTOR`, with `GITHUB_ACTOR_ID` when both name one account, GitLab `GITLAB_USER_*`, CircleCI `CIRCLE_USERNAME`, Buildkite `BUILDKITE_BUILD_CREATOR*`, Jenkins `CHANGE_AUTHOR*`/`BUILD_USER*`. On a GitHub re-run, the developer is the person who started the re-run. A CI that exposes no trigger-er, for example a bare `CI=true`, gives no developer.
 - **`developer` outside CI**: `git config user.name` and `user.email`, else the OS username.
-- **`committer`**: `git log -1` on `HEAD`. GitHub is the committer of every commit merged on github.com, so the reporter then uses the author. `HEAD` carries its own metadata, so the result does not depend on the checkout depth.
+- **`committer`**: `git log -1` on `HEAD`, when your function reads `committer` for the first time. The default reads it only when there is no developer. GitHub is the committer of every commit merged on github.com, so the reporter then uses the author. `HEAD` carries its own metadata, so the result does not depend on the checkout depth.
 
 Bots and AI agents never count. When one runs the tests (the same detection as
 `actor_type`), `developer` is absent, and the default falls back to `committer`.
-GitHub (`noreply@github.com`), `*[bot]` accounts and AI agents
-(`noreply@anthropic.com`) never count as a committer.
+GitHub (`noreply@github.com`) and `*[bot]` accounts never count as a developer
+or a committer. The same applies to the commit emails of the actor registry,
+for example `noreply@anthropic.com` (see
+[Trigger and actor detection](#trigger-and-actor-detection-ci-vs-manual-human-vs-bot-vs-ai)).
 
-A manual `triggered_by` in `tags`/`getTags` overrides the detected one. The
-`detectIdentities` helper is exported for reuse.
+A manual `triggered_by` or `user_source` in `tags`/`getTags` overrides the
+detected one. The `detectIdentities` helper is exported for reuse.
 
 #### The pseudonymized id
 

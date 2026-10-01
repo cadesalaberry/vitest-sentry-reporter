@@ -19,6 +19,7 @@ export const MANUALLY_OVERRIDABLE_TAGS = [
   'actor_type',
   'actor_name',
   'triggered_by',
+  'user_source',
   'code_owners',
   'code_owner',
 ] as const;

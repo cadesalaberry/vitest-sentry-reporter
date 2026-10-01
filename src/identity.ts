@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as os from 'node:os';
-import { detectActor } from './actor-detectors/index.js';
+import { ACTOR_DETECTORS, detectActor } from './actor-detectors/index.js';
 import { detectProvider } from './ci-providers/index.js';
 import type { SentryUser } from './types.js';
 
@@ -34,8 +34,9 @@ export type DetectedIdentities = {
   developer?: DetectedIdentity;
   /**
    * The person behind the latest commit (`HEAD`): its committer, else its
-   * author. GitHub, bots and AI agents do not count, so the field is absent
-   * when only they remain.
+   * author. GitHub, bots and AI agents do not count, so the field is
+   * `undefined` when only they remain. The first read runs `git log -1` in
+   * the current directory.
    */
   committer?: DetectedIdentity;
 };
@@ -45,7 +46,8 @@ export type DetectedIdentities = {
  *
  * `developer` comes from the CI provider in CI (see {@link detectProvider}),
  * and from `git config`, else the OS user, outside CI. `committer` comes from
- * the `HEAD` commit. Each one is absent when nothing usable resolves.
+ * the `HEAD` commit, on its first read. Each one is `undefined` when nothing
+ * usable resolves.
  */
 export function detectIdentities(
   env: NodeJS.ProcessEnv = process.env,
@@ -58,9 +60,21 @@ export function detectIdentities(
       identities.developer = toDetectedIdentity(person);
     }
   }
-  const committer = toDetectedIdentity(latestCommitter(env));
-  if (committer) identities.committer = committer;
+  // Run `git log` only if a caller reads the committer, and only once.
+  Object.defineProperty(identities, 'committer', {
+    enumerable: true,
+    get: once(() => toDetectedIdentity(latestCommitter(env))),
+  });
   return identities;
+}
+
+/** Call `fn` on the first call only, and return its result on every call. */
+function once<T>(fn: () => T): () => T {
+  let result: { value: T } | undefined;
+  return () => {
+    result ??= { value: fn() };
+    return result.value;
+  };
 }
 
 function runner(env: NodeJS.ProcessEnv): SentryUser | undefined {
@@ -103,20 +117,18 @@ function latestCommitter(env: NodeJS.ProcessEnv): SentryUser | undefined {
   ].find((person) => person && !isAutomation(person));
 }
 
-/**
- * Commit identities that are not a developer: GitHub itself, which commits
- * the merges made on github.com, and the AI agents that commit under their own
- * name. Add an agent here when it commits with a new address.
- */
-const AUTOMATION_EMAILS = new Set([
-  'noreply@github.com',
-  'noreply@anthropic.com',
-]);
+/** GitHub commits the merges made on github.com with this address. */
+const GITHUB_MERGE_EMAIL = 'noreply@github.com';
 
-/** GitHub, an AI agent, or a GitHub App bot such as `dependabot[bot]`. */
+/**
+ * GitHub, a GitHub App bot such as `dependabot[bot]`, or an agent of
+ * {@link ACTOR_DETECTORS} by its commit email. Add a new agent there.
+ */
 function isAutomation({ username, email }: SentryUser): boolean {
-  if (email && AUTOMATION_EMAILS.has(email.toLowerCase())) return true;
-  return /\[bot\]/.test(`${username ?? ''} ${email ?? ''}`);
+  if (/\[bot\]/.test(`${username ?? ''} ${email ?? ''}`)) return true;
+  if (!email) return false;
+  if (email.toLowerCase() === GITHUB_MERGE_EMAIL) return true;
+  return ACTOR_DETECTORS.some((actor) => actor.commitEmail?.test(email));
 }
 
 /** Run git and return trimmed stdout, or `undefined` if git is absent or fails. */
