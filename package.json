@@ -66,10 +66,10 @@
     "@biomejs/biome": "^2.4.16",
     "@sentry/node": "^10.27.0",
     "@types/node": "^26",
-    "@vitest/coverage-v8": "^4.0.13",
+    "@vitest/coverage-v8": "^5.0.1",
     "lefthook": "^2.1.9",
     "typescript": "^7.0.2",
-    "vitest": "^4.0.13"
+    "vitest": "^5.0.1"
   },
   "dependencies": {
     "ignore": "^7.0.5"

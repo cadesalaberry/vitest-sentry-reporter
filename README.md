@@ -43,7 +43,7 @@ export default defineConfig({
 });
 ```
 
-Compatible with Vitest 3 and 4.
+Compatible with Vitest 3, 4 and 5.
 
 ### All options
 

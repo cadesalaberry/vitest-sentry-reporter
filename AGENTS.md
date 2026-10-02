@@ -5,7 +5,7 @@ A dedicated guide for coding agents working on `vitest-sentry-reporter`. See the
 ## Project overview
 
 - Library: Vitest reporter that sends failures/context to Sentry.
-- Runtime: Node >= 18; ESM output.
+- Runtime: Node >= 18; ESM output. Developing on this repo needs Node ^22.12.0 || ^24 (the dev toolchain uses Vitest 5).
 - Package manager: Bun (see `engines.bun`).
 - Entry points: `src/index.ts` → builds to `dist/index.js`; type declarations emit to `dist/index.d.ts`.
 
