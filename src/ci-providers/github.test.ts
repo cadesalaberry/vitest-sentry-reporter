@@ -72,16 +72,32 @@ describe('GitHubActionsProvider', () => {
       GitHubActionsProvider.triggeredBy({
         ...env,
         GITHUB_TRIGGERING_ACTOR: 'alice',
-        GITHUB_ACTOR: 'bob',
+        GITHUB_ACTOR: 'alice',
         GITHUB_ACTOR_ID: '42',
       }),
     ).toEqual({ username: 'alice', id: '42' });
   });
 
+  it('resolves the person who re-ran the job, without the id of another account', () => {
+    // Bob re-runs the job of Alice. GITHUB_ACTOR_ID is the id of Alice.
+    expect(
+      GitHubActionsProvider.triggeredBy({
+        ...env,
+        GITHUB_TRIGGERING_ACTOR: 'bob',
+        GITHUB_ACTOR: 'alice',
+        GITHUB_ACTOR_ID: '42',
+      }),
+    ).toStrictEqual({ username: 'bob' });
+  });
+
   it('falls back to GITHUB_ACTOR and has none without either', () => {
     expect(
-      GitHubActionsProvider.triggeredBy({ ...env, GITHUB_ACTOR: 'bob' }),
-    ).toEqual({ username: 'bob' });
+      GitHubActionsProvider.triggeredBy({
+        ...env,
+        GITHUB_ACTOR: 'alice',
+        GITHUB_ACTOR_ID: '42',
+      }),
+    ).toEqual({ username: 'alice', id: '42' });
     expect(GitHubActionsProvider.triggeredBy(env)).toBeUndefined();
   });
 

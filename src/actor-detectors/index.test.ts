@@ -13,6 +13,23 @@ describe('actor-detectors', () => {
     });
   });
 
+  it('reads the account that started a GitHub re-run', () => {
+    // A developer re-runs the checks of a Dependabot pull request.
+    expect(
+      detectActor({
+        GITHUB_ACTOR: 'dependabot[bot]',
+        GITHUB_TRIGGERING_ACTOR: 'octocat',
+      }),
+    ).toEqual({ type: 'human', name: 'human' });
+    // An app re-runs the job of a developer.
+    expect(
+      detectActor({
+        GITHUB_ACTOR: 'octocat',
+        GITHUB_TRIGGERING_ACTOR: 'retry-app[bot]',
+      }),
+    ).toEqual({ type: 'bot', name: 'retry-app' });
+  });
+
   it.each([
     [{ CLAUDECODE: '1' }, 'claude-code'],
     [{ CLAUDE_CODE_ENTRYPOINT: 'cli' }, 'claude-code'],

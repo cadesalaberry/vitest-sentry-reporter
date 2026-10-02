@@ -9,7 +9,12 @@ import type {
 } from 'vitest/node';
 import { resolveCodeOwners } from './codeowners/index.js';
 import { makeDryRunTransport } from './dry-run-transport.js';
-import { detectIdentity, type IdentityOptions } from './identity.js';
+import {
+  type DetectedIdentities,
+  type DetectedIdentity,
+  detectIdentities,
+  isResolved,
+} from './identity.js';
 import type {
   FailureContext,
   Primitive,
@@ -29,6 +34,75 @@ import {
   toFailureContext,
 } from './utils.js';
 
+/**
+ * The default `getUser`: the pseudonymized id of the developer, else of the
+ * latest committer, so a run that a bot triggers can still count the person
+ * behind the change. It reads `committer` only when there is no developer,
+ * because the first read runs `git log`.
+ */
+function defaultGetUser(
+  _ctx: FailureContext,
+  detected: DetectedIdentities,
+): SentryUser | undefined {
+  const person = detected.developer ?? detected.committer;
+  return person ? { id: person.pseudonymizedId } : undefined;
+}
+
+/** The detected people that a Sentry user can stand for, in priority order. */
+const USER_SOURCES = ['developer', 'committer'] as const;
+type UserSource = (typeof USER_SOURCES)[number];
+
+/**
+ * Which detected person `user` stands for, for the `user_source` tag. It
+ * compares the fields, so it also works for a custom `getUser`. It compares
+ * only with the people that `getUser` read: a user cannot come from another
+ * one, and a new read would run git only for a tag.
+ */
+function userSource(
+  user: SentryUser,
+  detected: DetectedIdentities,
+): UserSource | undefined {
+  return USER_SOURCES.find(
+    (source) =>
+      isResolved(detected, source) && isSamePerson(user, detected[source]),
+  );
+}
+
+/** True when a field of `user` is a field of `person`. */
+function isSamePerson(
+  user: SentryUser,
+  person: DetectedIdentity | undefined,
+): boolean {
+  if (!person) return false;
+  const known: unknown[] = [
+    person.pseudonymizedId,
+    person.id,
+    person.username,
+    person.email,
+  ];
+  return [user.id, user.username, user.email].some(
+    (value) => Boolean(value) && known.includes(value),
+  );
+}
+
+/** 1.5.0 options that no longer exist, and what replaces each one. */
+const REMOVED_OPTIONS: Readonly<Record<string, string>> = {
+  identity: 'getUser',
+};
+
+/** Sentry needs an id, a username or an email to count a user. */
+function isSentryUser(value: unknown): value is SentryUser {
+  if (typeof value !== 'object' || value === null) return false;
+  const { id, username, email } = value as SentryUser;
+  return Boolean(id || username || email);
+}
+
+function describeValue(value: unknown): string {
+  return typeof value === 'object' && value !== null
+    ? 'an object without an id, a username or an email'
+    : `a ${typeof value}`;
+}
+
 export class VitestSentryReporter implements Reporter {
   public name: string;
   private options: VitestSentryReporterOptions;
@@ -40,10 +114,12 @@ export class VitestSentryReporter implements Reporter {
   private maxEventsPerRun?: number;
   private codeownersEnabled: boolean;
   private codeownersRoot?: string;
-  private identityEnabled: boolean;
-  private identityOptions: IdentityOptions;
-  private identityResolved: boolean;
-  private identityUser?: SentryUser;
+  private getUser?: (
+    ctx: FailureContext,
+    detected: DetectedIdentities,
+  ) => SentryUser | undefined;
+  private detected?: DetectedIdentities;
+  private warned: Set<string>;
 
   constructor(options: VitestSentryReporterOptions = {}) {
     this.name = 'vitest-sentry-reporter';
@@ -65,11 +141,27 @@ export class VitestSentryReporter implements Reporter {
         : repoRoot()
       : undefined;
 
-    const id = options.identity;
-    this.identityEnabled =
-      id === true || (typeof id === 'object' && id !== null);
-    this.identityOptions = typeof id === 'object' && id !== null ? id : {};
-    this.identityResolved = false;
+    // `false` turns identity off. Any other value that is not a function falls
+    // back to the default, so an unexpected value never sends more than a
+    // pseudonym.
+    const getUser = options.getUser;
+    this.getUser =
+      getUser === false
+        ? undefined
+        : typeof getUser === 'function'
+          ? getUser
+          : defaultGetUser;
+    this.warned = new Set<string>();
+
+    // A JavaScript config can still carry a 1.5.0 key. Say once that it has
+    // no effect, instead of ignoring it silently.
+    for (const [key, replacement] of Object.entries(REMOVED_OPTIONS)) {
+      if (key in options) {
+        console.warn(
+          `[vitest-sentry-reporter] The "${key}" option no longer exists and has no effect. Use "${replacement}" instead.`,
+        );
+      }
+    }
   }
 
   onInit(): void {
@@ -146,11 +238,14 @@ export class VitestSentryReporter implements Reporter {
       owners.length > 0
         ? { code_owners: owners.join(','), code_owner: owners[0] }
         : {};
-    // Searchable counterpart to the Sentry user: who triggered the run.
-    const identityUser = this.resolveIdentity();
-    const triggeredBy = identityUser?.username ?? identityUser?.id;
-    const identityTags: Record<string, Primitive> = triggeredBy
-      ? { triggered_by: triggeredBy }
+    // The Sentry user for this failure, and its searchable counterparts.
+    const resolved = this.resolveUser(ctx);
+    const user = resolved?.user;
+    const identityTags: Record<string, Primitive> = resolved
+      ? {
+          triggered_by: resolved.user.username || resolved.user.id,
+          user_source: resolved.source,
+        }
       : {};
     const mergedTags = {
       ...manualTags,
@@ -212,8 +307,6 @@ export class VitestSentryReporter implements Reporter {
       if (Object.keys(ci).length > 0) scope.setContext('ci', ci);
       scope.setFingerprint(fingerprint);
 
-      // getUser wins; otherwise fall back to the auto-detected identity.
-      const user = this.options.getUser?.(ctx) ?? identityUser;
       if (user) scope.setUser(user);
 
       if (this.options.beforeSend) {
@@ -299,17 +392,43 @@ export class VitestSentryReporter implements Reporter {
   }
 
   /**
-   * The developer who triggered the run, or `undefined` when the `identity`
-   * option is off or nothing could be resolved. Detected once and cached, since
-   * the trigger-er is constant across a single run.
+   * The user that `getUser` picks for one failure, and the detected person
+   * that it stands for. `undefined` when `getUser` is `false`, returns
+   * nothing, returns a value that is not a Sentry user, or throws. The
+   * detection is made once, on the first failure, since the developer behind
+   * a run does not change during the run. Each person resolves only when
+   * `getUser` reads it.
    */
-  private resolveIdentity(): SentryUser | undefined {
-    if (!this.identityEnabled) return undefined;
-    if (!this.identityResolved) {
-      this.identityUser = detectIdentity(process.env, this.identityOptions);
-      this.identityResolved = true;
+  private resolveUser(
+    ctx: FailureContext,
+  ): { user: SentryUser; source?: UserSource } | undefined {
+    if (!this.getUser) return undefined;
+    this.detected ??= detectIdentities(process.env);
+    const detected = this.detected;
+    let user: unknown;
+    try {
+      user = this.getUser(ctx, detected);
+    } catch (error) {
+      // A broken callback costs the Sentry user, never the failure event.
+      this.warnOnce(
+        'getUser threw an error. The reporter sends the failure without a user.',
+        error,
+      );
+      return undefined;
     }
-    return this.identityUser;
+    if (!user) return undefined;
+    if (isSentryUser(user)) return { user, source: userSource(user, detected) };
+    this.warnOnce(
+      `getUser returned ${describeValue(user)}, and not a Sentry user with an id, a username or an email. The reporter sends the failure without a user.`,
+    );
+    return undefined;
+  }
+
+  /** Log each warning once per run, however many failures trigger it. */
+  private warnOnce(message: string, ...details: unknown[]): void {
+    if (this.warned.has(message)) return;
+    this.warned.add(message);
+    console.warn(`[vitest-sentry-reporter] ${message}`, ...details);
   }
 }
 

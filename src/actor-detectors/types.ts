@@ -17,4 +17,9 @@ export interface ActorDetector {
   /** Reported as the `actor_type` Sentry tag when this detector matches. */
   readonly type: ActorType;
   isActive(env: NodeJS.ProcessEnv): boolean;
+  /**
+   * Matches the git email of this actor, when it commits under its own name.
+   * A git user or a commit with a matching email never counts as a person.
+   */
+  readonly commitEmail?: RegExp;
 }

@@ -10,7 +10,7 @@ const ACTOR_TYPES: readonly ActorType[] = ['ai', 'bot', 'human'];
 /**
  * Ordered registry of known actors; the first matching detector wins.
  * To support a new AI agent or bot, append an entry describing the
- * environment markers it sets.
+ * environment markers it sets, and the git email it commits with.
  */
 export const ACTOR_DETECTORS: readonly ActorDetector[] = [
   // AI coding agents
@@ -18,16 +18,20 @@ export const ACTOR_DETECTORS: readonly ActorDetector[] = [
     name: 'claude-code',
     type: 'ai',
     isActive: (env) => Boolean(env.CLAUDECODE ?? env.CLAUDE_CODE_ENTRYPOINT),
+    commitEmail: /^noreply@anthropic\.com$/i,
   },
   {
     name: 'cursor',
     type: 'ai',
     isActive: (env) => Boolean(env.CURSOR_AGENT),
+    commitEmail: /^cursoragent@cursor\.com$/i,
   },
   {
     name: 'github-copilot',
     type: 'ai',
     isActive: (env) => env.GITHUB_ACTOR === 'copilot-swe-agent[bot]',
+    // GitHub's noreply form: `<account id>+Copilot@users.noreply.github.com`.
+    commitEmail: /^\d+\+copilot@users\.noreply\.github\.com$/i,
   },
   {
     name: 'openai-codex',
@@ -100,9 +104,15 @@ function autoDetectActor(env: NodeJS.ProcessEnv): ActorInfo {
   return { type: 'human', name: 'human' };
 }
 
-/** Login of the account that triggered the CI pipeline, when exposed. */
+/**
+ * Login of the account that triggered the CI pipeline, when exposed. On a
+ * GitHub re-run, it is the account that started the re-run, as for the
+ * GitHub provider: a person who re-runs the job of a bot is a human.
+ */
 function ciActorLogin(env: NodeJS.ProcessEnv): string | undefined {
-  return env.GITHUB_ACTOR ?? env.GITLAB_USER_LOGIN;
+  return (
+    env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR || env.GITLAB_USER_LOGIN
+  );
 }
 
 function isBotLogin(login: string): boolean {

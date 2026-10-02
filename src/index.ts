@@ -10,10 +10,10 @@ export type {
   ActorType,
 } from './actor-detectors/types.js';
 export {
-  detectIdentity,
-  type IdentityOptions,
-  type IdentitySource,
+  type DetectedIdentities,
+  type DetectedIdentity,
+  detectIdentities,
 } from './identity.js';
 export { default } from './reporter.js';
-export type { SentryUser } from './types.js';
+export type { FailureContext, SentryUser } from './types.js';
 export { detectTrigger, TRIGGER_ENV } from './utils.js';
