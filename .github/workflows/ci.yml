@@ -22,6 +22,13 @@ jobs:
         with:
           bun-version: '1.2.21'
 
+      # Vitest 5 requires Node ^22.12.0 || ^24.0.0 || >=26.0.0. Pin Node so the test step
+      # does not depend on whatever version the runner image ships.
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
       # --frozen-lockfile keeps CI in lockstep with the npm publish job
       # (.github/workflows/release.yml), which also installs frozen. Without it,
       # a stale bun.lock — e.g. a Dependabot bump that updates package.json but
@@ -37,11 +44,11 @@ jobs:
         run: bun run build
 
       - name: Test
-        if: matrix.vitest != '4'
+        if: matrix.vitest != '5'
         run: bun run test run
 
       - name: Test with coverage
-        if: matrix.vitest == '4'
+        if: matrix.vitest == '5'
         run: bun run test:coverage
 
       - name: Upload coverage to Codecov
@@ -51,7 +58,7 @@ jobs:
         # branches ("Token required because branch is protected"), which then
         # fails the job via fail_ci_if_error. Skip the upload for Dependabot;
         # coverage is still uploaded on main pushes and regular PRs.
-        if: matrix.vitest == '4' && github.actor != 'dependabot[bot]'
+        if: matrix.vitest == '5' && github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
