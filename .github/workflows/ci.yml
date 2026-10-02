@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vitest: ['3', '4']
+        vitest: ['3', '4', '5']
     name: build-and-test (vitest ${{ matrix.vitest }})
     steps:
       - name: Checkout
