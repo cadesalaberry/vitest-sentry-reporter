@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.5.0...v2.0.0) (2026-10-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **identity:** by default, the reporter sends a pseudonymized id as the Sentry user. It is the id of the developer who ran the tests, else of the latest committer. With the default `getUser`, on the first failure, the reporter runs `git config` outside CI, and `git log -1` when it finds no developer. By default, 1.5.0 sent no user and ran no git command. `getUser: false` sends no user. The `identity` option no longer exists. `detectIdentities`, `DetectedIdentities` and `DetectedIdentity` replace `detectIdentity`, `IdentityOptions` and `IdentitySource`.
+
+### ✨ Features
+
+* ⬆️ support Vitest 5 ([#62](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/62)) ([400531f](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/400531fe6c3bfa1a1715f5394e63e3db50f8ba43))
+* **identity:** pick the Sentry user with a getUser callback, pseudonymous by default ([#55](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/55)) ([faf9504](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/faf9504809562676ff15ad5629db804e6e2e12bb))
+
 ## [1.5.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.4.4...v1.5.0) (2026-08-14)
 
 
