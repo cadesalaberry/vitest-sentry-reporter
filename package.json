@@ -51,7 +51,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18",
+    "node": ">=20.19.0",
     "bun": ">=1.1.0"
   },
   "packageManager": "bun@1.2.21",
