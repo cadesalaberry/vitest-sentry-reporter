@@ -11,7 +11,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vitest: ['3', '4']
+        include:
+          # Vitest 3 and 4 still support Node 20, so their legs keep testing the
+          # oldest Node a consumer can run. Vitest 5 (the dev toolchain) uses the
+          # version pinned in .nvmrc.
+          - vitest: '3'
+            node: '20'
+          - vitest: '4'
+            node: '20'
+          - vitest: '5'
+            node-version-file: .nvmrc
     name: build-and-test (vitest ${{ matrix.vitest }})
     steps:
       - name: Checkout
@@ -21,6 +30,14 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.2.21'
+
+      # Vitest 5 requires Node ^22.12.0 || ^24.0.0 || >=26.0.0. Pin Node per leg so the
+      # test step does not depend on whatever version the runner image ships.
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          node-version-file: ${{ matrix.node-version-file }}
 
       # --frozen-lockfile keeps CI in lockstep with the npm publish job
       # (.github/workflows/release.yml), which also installs frozen. Without it,
@@ -37,11 +54,11 @@ jobs:
         run: bun run build
 
       - name: Test
-        if: matrix.vitest != '4'
+        if: matrix.vitest != '5'
         run: bun run test run
 
       - name: Test with coverage
-        if: matrix.vitest == '4'
+        if: matrix.vitest == '5'
         run: bun run test:coverage
 
       - name: Upload coverage to Codecov
@@ -51,7 +68,7 @@ jobs:
         # branches ("Token required because branch is protected"), which then
         # fails the job via fail_ci_if_error. Skip the upload for Dependabot;
         # coverage is still uploaded on main pushes and regular PRs.
-        if: matrix.vitest == '4' && github.actor != 'dependabot[bot]'
+        if: matrix.vitest == '5' && github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
