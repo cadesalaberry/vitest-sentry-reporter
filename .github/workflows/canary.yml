@@ -1,0 +1,73 @@
+name: Canary
+
+# Tests the reporter against the newest releases of its peer dependencies and
+# of Node.
+#
+# The peer ranges in package.json have no upper bound (`vitest >=3.0.0`,
+# `@sentry/node >=10.0.0`). A new major of Vitest or of the Sentry SDK can
+# therefore reach consumers before any pull request tests it. This workflow
+# finds that breakage within a week of the release, instead of in a bug report.
+#
+# A failure here does not block anything. It is a signal: open a fix, or cap
+# the peer range until a fix exists.
+#
+# GitHub sends the failure notification to the person who last changed the
+# cron schedule below. GitHub also disables scheduled workflows in a public
+# repository after 60 days without repository activity; re-enable it from the
+# Actions tab if that happens.
+on:
+  schedule:
+    # Mondays at 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  latest:
+    runs-on: ubuntu-latest
+    name: canary (latest vitest, latest @sentry/node, node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # `lts/*` is what most consumers run. `latest` is the newest Node
+        # release, which shows a breaking Node change before it reaches LTS.
+        node: ['lts/*', 'latest']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes with git, so keep the token out of .git/config.
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          # Reads the version from the packageManager field.
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Upgrade only the packages that consumers bring themselves. The
+      # @vitest/* packages pin vitest to their own version, and vitest peers
+      # on vite, so they move together.
+      - name: Upgrade peer dependencies to latest
+        run: bun add -d vitest@latest @vitest/coverage-v8@latest vite@latest @sentry/node@latest
+
+      - name: Show tested versions
+        run: |
+          node --version
+          bun pm ls | grep -E '(vitest|vite|@sentry/node)@' || true
+
+      - name: Build
+        run: bun run build
+
+      - name: Test
+        run: bun run test run

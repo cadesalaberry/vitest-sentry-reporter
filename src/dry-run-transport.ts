@@ -1,4 +1,9 @@
-import type { Envelope, Event, SeverityLevel } from '@sentry/core';
+import type { Event, NodeOptions, SeverityLevel } from '@sentry/node';
+
+// @sentry/node does not export Envelope. Derive it from the transport API, so
+// this file needs only the peer dependency and not the transitive @sentry/core.
+type Transport = ReturnType<NonNullable<NodeOptions['transport']>>;
+type Envelope = Parameters<Transport['send']>[0];
 
 const LEVEL_TO_EMOJI: Record<SeverityLevel, string> = {
   debug: '🐛',

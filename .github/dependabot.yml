@@ -2,7 +2,8 @@
 # Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 version: 2
 updates:
-  # GitHub Actions used in workflows.
+  # GitHub Actions used in workflows. The workflows pin each action by commit
+  # SHA with a version comment; Dependabot updates both.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -13,10 +14,11 @@ updates:
       - dependencies
       - github-actions
 
-  # JavaScript/TypeScript dependencies (package.json).
-  # Note: if Dependabot does not update the Bun lockfile, switch to Renovate,
-  # which has mature Bun support.
-  - package-ecosystem: npm
+  # JavaScript/TypeScript dependencies (package.json + bun.lock).
+  # The `bun` ecosystem updates bun.lock. The `npm` ecosystem cannot: its
+  # update jobs fail with "Dependabot's npm_and_yarn ecosystem cannot update
+  # bun.lock", so no bump PR is opened at all.
+  - package-ecosystem: bun
     directory: /
     schedule:
       interval: weekly
@@ -25,6 +27,15 @@ updates:
       prefix: build
       prefix-development: chore
     groups:
+      # vitest and the @vitest/* packages pin each other to the same version
+      # (e.g. @vitest/coverage-v8 5.0.1 peers on vitest 5.0.1). A bump of only
+      # one of them cannot install, so they move in one PR, majors included.
+      # A dependency goes to the first group that matches it, so this group
+      # comes before dev-dependencies.
+      vitest:
+        patterns:
+          - vitest
+          - '@vitest/*'
       dev-dependencies:
         dependency-type: development
         update-types:

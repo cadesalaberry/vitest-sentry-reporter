@@ -5,36 +5,55 @@ on:
     branches: [ main ]
   pull_request:
 
+# The jobs only read the repository. Codecov authenticates with its own token.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        # Each leg pins one Vitest major and one Sentry SDK major, so every
+        # major that the peer ranges in package.json accept is tested.
         include:
           # Vitest 3 and 4 still support Node 20, so their legs keep testing the
           # oldest Node a consumer can run. Vitest 5 (the dev toolchain) uses the
           # version pinned in .nvmrc.
           - vitest: '3'
+            sentry: '10'
             node: '20'
           - vitest: '4'
+            sentry: '11'
             node: '20'
           - vitest: '5'
+            sentry: '10'
             node-version-file: .nvmrc
-    name: build-and-test (vitest ${{ matrix.vitest }})
+          # The dev toolchain as locked in bun.lock. Only this leg collects
+          # coverage.
+          - vitest: '5'
+            sentry: '11'
+            node-version-file: .nvmrc
+            coverage: true
+    name: build-and-test (vitest ${{ matrix.vitest }}, sentry ${{ matrix.sentry }})
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes with git, so keep the token out of .git/config.
+          persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: '1.2.21'
+          # Reads the version from the packageManager field.
+          bun-version-file: package.json
 
       # Vitest 5 requires Node ^22.12.0 || ^24.0.0 || >=26.0.0. Pin Node per leg so the
       # test step does not depend on whatever version the runner image ships.
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node }}
           node-version-file: ${{ matrix.node-version-file }}
@@ -47,18 +66,18 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Pin Vitest ${{ matrix.vitest }}
-        run: bun add -d vitest@${{ matrix.vitest }}
+      - name: Pin Vitest ${{ matrix.vitest }} and @sentry/node ${{ matrix.sentry }}
+        run: bun add -d vitest@${{ matrix.vitest }} @sentry/node@${{ matrix.sentry }}
 
       - name: Build
         run: bun run build
 
       - name: Test
-        if: matrix.vitest != '5'
+        if: ${{ !matrix.coverage }}
         run: bun run test run
 
       - name: Test with coverage
-        if: matrix.vitest == '5'
+        if: ${{ matrix.coverage }}
         run: bun run test:coverage
 
       - name: Upload coverage to Codecov
@@ -68,8 +87,8 @@ jobs:
         # branches ("Token required because branch is protected"), which then
         # fails the job via fail_ci_if_error. Skip the upload for Dependabot;
         # coverage is still uploaded on main pushes and regular PRs.
-        if: matrix.vitest == '5' && github.actor != 'dependabot[bot]'
-        uses: codecov/codecov-action@v7
+        if: matrix.coverage && github.actor != 'dependabot[bot]'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           # Derive the slug from the current repo so forks upload to their own
@@ -89,12 +108,16 @@ jobs:
     name: lint & package checks
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes with git, so keep the token out of .git/config.
+          persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: '1.2.21'
+          # Reads the version from the packageManager field.
+          bun-version-file: package.json
 
       # Frozen install: see the note in the build-and-test job above.
       - name: Install dependencies
