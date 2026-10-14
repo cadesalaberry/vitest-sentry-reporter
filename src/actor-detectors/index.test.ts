@@ -38,21 +38,23 @@ describe('actor-detectors', () => {
     [{ CODEX_SANDBOX: 'seatbelt' }, 'openai-codex'],
     [{ GEMINI_CLI: '1' }, 'gemini-cli'],
     [{ OPENCODE: '1' }, 'opencode'],
-  ] as Array<
-    [NodeJS.ProcessEnv, string]
-  >)('detects the AI agent from its markers: %o', (env, name) => {
-    expect(detectActor(env)).toEqual({ type: 'ai', name });
-  });
+  ] as Array<[NodeJS.ProcessEnv, string]>)(
+    'detects the AI agent from its markers: %o',
+    (env, name) => {
+      expect(detectActor(env)).toEqual({ type: 'ai', name });
+    },
+  );
 
   it.each([
     [{ GITHUB_ACTOR: 'dependabot[bot]' }, 'dependabot'],
     [{ RENOVATE_VERSION: '39.0.0' }, 'renovate'],
     [{ GITLAB_USER_LOGIN: 'renovate[bot]' }, 'renovate'],
-  ] as Array<
-    [NodeJS.ProcessEnv, string]
-  >)('detects known automation bots: %o', (env, name) => {
-    expect(detectActor(env)).toEqual({ type: 'bot', name });
-  });
+  ] as Array<[NodeJS.ProcessEnv, string]>)(
+    'detects known automation bots: %o',
+    (env, name) => {
+      expect(detectActor(env)).toEqual({ type: 'bot', name });
+    },
+  );
 
   it('falls back to the generic AI_AGENT/AGENT conventions', () => {
     expect(detectActor({ AI_AGENT: 'my-internal-agent' })).toEqual({
