@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.0.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v2.0.0...v3.0.0) (2026-10-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* 💥 require Node 20.19 and adopt a version support policy ([#64](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/64))
+
+### ✨ Features
+
+* 💥 require Node 20.19 and adopt a version support policy ([#64](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/64)) ([9015186](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/90151868731b1653fe69b19371bf5ba818f747f5))
+
+
+### 📦️ Build System
+
+* bump ignore from 7.0.5 to 7.0.12 ([#67](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/67)) ([18faa5b](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/18faa5bb461817559c71301ca50159375865e9e5))
+
+
+### 👷 Continuous Integration
+
+* 👷 test every supported peer major and catch new ones weekly ([#63](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/63)) ([ff03159](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/ff0315999d738de50a1ed039f6356defd770700d))
+* bump actions/setup-node from 7.0.0 to 7.1.0 ([#69](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/69)) ([b58a86d](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/b58a86d6f6ce371f220f782c74968ceec19e3e0c))
+
 ## [2.0.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v1.5.0...v2.0.0) (2026-10-05)
 
 
