@@ -56,10 +56,12 @@ jobs:
         run: bun install --frozen-lockfile
 
       # Upgrade only the packages that consumers bring themselves. The
-      # @vitest/* packages pin vitest to their own version, and vitest peers
-      # on vite, so they move together.
+      # @vitest/* packages pin vitest to their own version, so they move
+      # together. vite is not forced to latest: bun installs a peer mismatch
+      # with only a warning, so a vite major that vitest does not support yet
+      # would fail this job for a pairing that consumers cannot install.
       - name: Upgrade peer dependencies to latest
-        run: bun add -d vitest@latest @vitest/coverage-v8@latest vite@latest @sentry/node@latest
+        run: bun add -d vitest@latest @vitest/coverage-v8@latest @sentry/node@latest
 
       - name: Show tested versions
         run: |

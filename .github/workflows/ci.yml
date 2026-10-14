@@ -66,7 +66,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # The coverage leg skips this step: `bun add` re-resolves to the newest
+      # matching version and ignores bun.lock, and that leg must test the
+      # exact versions that release.yml installs with --frozen-lockfile.
       - name: Pin Vitest ${{ matrix.vitest }} and @sentry/node ${{ matrix.sentry }}
+        if: ${{ !matrix.coverage }}
         run: bun add -d vitest@${{ matrix.vitest }} @sentry/node@${{ matrix.sentry }}
 
       - name: Build

@@ -28,14 +28,16 @@ updates:
       prefix-development: chore
     groups:
       # vitest and the @vitest/* packages pin each other to the same version
-      # (e.g. @vitest/coverage-v8 5.0.1 peers on vitest 5.0.1). A bump of only
-      # one of them cannot install, so they move in one PR, majors included.
+      # (e.g. @vitest/coverage-v8 5.0.1 peers on vitest 5.0.1), and vitest
+      # peers on vite. A bump of only one of them may not install, so they
+      # move in one PR, majors included.
       # A dependency goes to the first group that matches it, so this group
       # comes before dev-dependencies.
       vitest:
         patterns:
           - vitest
           - '@vitest/*'
+          - vite
       dev-dependencies:
         dependency-type: development
         update-types:
