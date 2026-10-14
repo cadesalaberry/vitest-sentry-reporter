@@ -18,15 +18,16 @@ jobs:
         # Each leg pins one Vitest major and one Sentry SDK major, so every
         # major that the peer ranges in package.json accept is tested.
         include:
-          # Vitest 3 and 4 still support Node 20, so their legs keep testing the
-          # oldest Node a consumer can run. Vitest 5 (the dev toolchain) uses the
-          # version pinned in .nvmrc.
+          # Vitest 3 and 4 still support Node 20, so their legs test the floor
+          # in engines.node (>=20.19.0). setup-node resolves '20.19' to the
+          # newest 20.19.x patch. Vitest 5 (the dev toolchain) needs Node 22+
+          # and uses the version pinned in .nvmrc. See docs/decisions/0015.
           - vitest: '3'
             sentry: '10'
-            node: '20'
+            node: '20.19'
           - vitest: '4'
             sentry: '11'
-            node: '20'
+            node: '20.19'
           - vitest: '5'
             sentry: '10'
             node-version-file: .nvmrc

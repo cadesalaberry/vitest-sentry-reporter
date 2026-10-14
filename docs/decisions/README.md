@@ -25,6 +25,7 @@ This directory contains Architectural Decision Records using MADR (Markdown Arch
 | [0012](0012-fork-publishing-by-rebase.md) | Run release-please only upstream and publish forks by rebase | accepted | 2026-07-24 |
 | [0013](0013-derive-published-package-name-from-repository.md) | Require published package identity as configuration, not a commit | accepted | 2026-08-14 |
 | [0014](0014-get-user-callback-pseudonymous-by-default.md) | Pick the Sentry user with a getUser callback, pseudonymous by default | accepted | 2026-09-30 |
+| [0015](0015-version-support-policy.md) | Define a version support policy and raise the Node floor to 20.19 | accepted | 2026-10-05 |
 
 ADRs are numbered sequentially in the chronological order in which they were decided.
 

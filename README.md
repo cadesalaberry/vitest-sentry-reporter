@@ -26,6 +26,9 @@ Good teams observe production. Great teams also observe their tests.
 bun add -D vitest-sentry-reporter @sentry/node
 ```
 
+Requires Node 20.19.0 or later, Vitest 3 or later, and `@sentry/node` 10 or
+later. See the [version support policy](docs/decisions/0015-version-support-policy.md).
+
 ## Usage
 
 Add the reporter to your `vitest.config.ts`. The reporter reads `SENTRY_DSN`
