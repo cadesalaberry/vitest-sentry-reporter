@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.2](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v3.0.1...v3.0.2) (2026-10-20)
+
+
+### 👷 Continuous Integration
+
+* 👷 silence Semgrep false positive on the token add-mask ([#72](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/72)) ([087aaee](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/087aaee27432db597608586809a4700a17343be8))
+
 ## [3.0.1](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v3.0.0...v3.0.1) (2026-10-20)
 
 
