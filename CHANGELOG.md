@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.1](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v3.0.0...v3.0.1) (2026-10-20)
+
+
+### 👷 Continuous Integration
+
+* 👷 pin GitHub-hosted runners to ubuntu-24.04 ([#70](https://github.com/cadesalaberry/vitest-sentry-reporter/issues/70)) ([232d2c0](https://github.com/cadesalaberry/vitest-sentry-reporter/commit/232d2c01d0cdc3e128ca5e7dc75b15eb82b75e8e))
+
 ## [3.0.0](https://github.com/cadesalaberry/vitest-sentry-reporter/compare/v2.0.0...v3.0.0) (2026-10-14)
 
 
