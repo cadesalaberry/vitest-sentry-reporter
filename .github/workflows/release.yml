@@ -224,7 +224,8 @@ jobs:
             # .npmrc refers to the encoded PAT as ${AZURE_NPM_PASSWORD}, so the
             # value is not written in clear text, and the logs mask it.
             AZURE_NPM_PASSWORD="$(printf '%s' "${NPM_TOKEN}" | base64 -w0)"
-            echo "::add-mask::${AZURE_NPM_PASSWORD}"
+            # masking this derived value is required; the rule flags any add-mask
+            echo "::add-mask::${AZURE_NPM_PASSWORD}" # nosemgrep: unsafe-add-mask-workflow-command
             export AZURE_NPM_PASSWORD
             keys=("//${host_path}")
             root_key="//${host_path%registry/}"
